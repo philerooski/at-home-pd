@@ -1,4 +1,6 @@
 import synapseclient as sc
+import synapseutils as su
+import pandas as pd
 
 
 TABLE_MAPPINGS = {
@@ -26,8 +28,35 @@ def get_relevant_external_ids(syn):
     return relevant_participants.guid.unique()
 
 
+def copy_file_handles(syn, new_records, source):
+    cols = [c for c in syn.getColumns(source)]
+    for c in cols:
+        if c['columnType'] == 'FILEHANDLEID':
+            fhids_to_copy = new_records[c['name']].dropna().astype(int).tolist()
+            new_fhids = su.copyFileHandles(
+                    syn = syn,
+                    fileHandles = fhids_to_copy,
+                    associateObjectTypes = ["TableEntity"] * len(fhids_to_copy),
+                    associateObjectIds = [source] * len(fhids_to_copy),
+                    contentTypes = ["application/json"] * len(fhids_to_copy),
+                    fileNames = [None] * len(fhids_to_copy))
+            new_fhids = pd.DataFrame(
+                    {c['name']: fhids_to_copy,
+                     "new_fhids": [int(i['newFileHandle']['id']) for i in
+                                        new_fhids['copyResults']]})
+            new_records = new_records.merge(new_fhids, how='left', on=c['name'])
+            new_records[c['name']] = new_records['new_fhids']
+            new_records = new_records.drop("new_fhids", axis = 1)
+            new_records = new_records.drop_duplicates(subset = "recordId")
+        elif c['columnType'] not in ["INTEGER", "DOUBLE"]:
+            new_records[c['name']] = [
+                    None if pd.isnull(i) else i for i in new_records[c['name']]]
+    return new_records
+
+
 def update_tables(syn, relevant_external_ids):
     for source, target in TABLE_MAPPINGS.items():
+        print("source: ", source)
         external_ids_str = "('{}')".format("', '".join(relevant_external_ids))
         source_table = syn.tableQuery(
                 "SELECT * FROM {} WHERE externalId IN {}".format(
@@ -37,10 +66,10 @@ def update_tables(syn, relevant_external_ids):
         target_table = target_table.asDataFrame().set_index("recordId", drop=False)
         new_records = source_table.loc[
                 source_table.index.difference(target_table.index)]
-        # TODO: replace file handles with copies
-        if len(new_records):
-            new_target_table = sc.Table(target, new_records.values)
-            syn.store(new_target_table)
+        if len(new_records): # new records found from the relevant external ids
+            new_records = copy_file_handles(syn, new_records, source)
+            new_target_table = sc.Table(target, new_records.values.tolist())
+            syn.store(new_target_table, used = [source])
 
 
 
