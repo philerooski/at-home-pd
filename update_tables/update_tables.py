@@ -16,8 +16,16 @@ TABLE_MAPPINGS = {
         "syn15673377": "syn17014783", # StudyBurstReminder-v1
         "syn15664831": "syn17014784", # Motivation-v1
         "syn12977322": "syn17014785", # Tremor-v3
-        "syn12514611": "syn17014786"} # WalkAndBalance-v1
+        "syn12514611": "syn17014786", # WalkAndBalance-v1
+        "syn12492996": "syn17015960"} # Health Data Summary Table
 PARTICIPANT_CREATION_TABLE = "syn16786935"
+
+
+def get_env_var_credentials():
+    credentials = {}
+    credentials['synapseUsername'] = os.getenv('synapseUsername')
+    credentials['synapsePassword'] = os.getenv('synapsePassword')
+    return credentials
 
 
 def get_relevant_external_ids(syn):
@@ -69,12 +77,14 @@ def update_tables(syn, relevant_external_ids):
         if len(new_records): # new records found from the relevant external ids
             new_records = copy_file_handles(syn, new_records, source)
             new_target_table = sc.Table(target, new_records.values.tolist())
-            syn.store(new_target_table, used = [source])
+            syn.store(new_target_table, used = source)
 
 
 
 def main():
-    syn = sc.login()
+    credentials = get_env_var_credentials()
+    syn = sc.login(email = credentials['synapseUsername'],
+                   password = credentials['synapsePassword'])
     relevant_external_ids = get_relevant_external_ids(syn)
     update_tables(syn, relevant_external_ids)
 
