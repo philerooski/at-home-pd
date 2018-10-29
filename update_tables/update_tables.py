@@ -1,6 +1,7 @@
 import synapseclient as sc
 import synapseutils as su
 import pandas as pd
+import os
 
 
 TABLE_MAPPINGS = {
