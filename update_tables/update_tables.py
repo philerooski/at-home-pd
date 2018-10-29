@@ -65,7 +65,6 @@ def copy_file_handles(syn, new_records, source):
 
 def update_tables(syn, relevant_external_ids):
     for source, target in TABLE_MAPPINGS.items():
-        print("source: ", source)
         external_ids_str = "('{}')".format("', '".join(relevant_external_ids))
         source_table = syn.tableQuery(
                 "SELECT * FROM {} WHERE externalId IN {}".format(
@@ -79,7 +78,6 @@ def update_tables(syn, relevant_external_ids):
             new_records = copy_file_handles(syn, new_records, source)
             new_target_table = sc.Table(target, new_records.values.tolist())
             syn.store(new_target_table, used = source)
-
 
 
 def main():

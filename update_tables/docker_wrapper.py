@@ -3,16 +3,12 @@ import requests
 import json
 import os
 
-
 def read_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--synapseUsername")
     parser.add_argument("--synapsePassword")
-    parser.add_argument("--bridgeUsername")
-    parser.add_argument("--bridgePassword")
     args = parser.parse_args()
     return(args)
-
 
 def main():
     args = read_args()
@@ -20,11 +16,8 @@ def main():
     d = json.loads(r.content)
     if d['status'] == "READ_WRITE":
         os.system("docker run --rm -e synapseUsername={} -e synapsePassword={} "
-                  "-e bridgeUsername={} -e bridgePassword={} "
-                  "philsnyder/at-home-pd:user_add".format(
-                      args.synapseUsername, args.synapsePassword,
-                      args.bridgeUsername, args.bridgePassword))
-
+                  "philsnyder/at-home-pd:update_tables".format(
+                      args.synapseUsername, args.synapsePassword))
 
 if __name__ == "__main__":
     main()
