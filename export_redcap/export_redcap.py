@@ -2,6 +2,7 @@ import argparse
 import redcap
 import synapseclient as sc
 
+SYNAPSE_PARENT = "syn16809549"
 
 def read_args():
     parser = argparse.ArgumentParser()
@@ -21,8 +22,8 @@ def filter_identifiers(records):
 
 def store_to_synapse(records):
     syn = sc.login()
-    records.to_csv("redcap_export.csv", index = False)
-    f = sc.File("redcap_export.csv", parent = "syn16809552")
+    records.to_csv("exported_records.csv", index = False)
+    f = sc.File("exported_records.csv", parent = SYNAPSE_PARENT)
     syn.store(f)
 
 
