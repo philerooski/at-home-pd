@@ -81,11 +81,11 @@ def process_request(bridge, participant_info, phone_number, external_id):
         # create account
         try:
             # assign to random engagement group
-            engagement_groups = random.choice([
-                ["gr_SC_DB","gr_SC_CS"],
-                ["gr_BR_AD","gr_BR_II"],
-                ["gr_ST_T","gr_ST_F"],
-                ["gr_DT_F","gr_DT_T"]])
+            engagement_groups = []
+            engagement_groups.append(random.choice(["gr_SC_DB", "gr_SC_CS"]))
+            engagement_groups.append(random.choice(["gr_BR_AD", "gr_BR_II"]))
+            engagement_groups.append(random.choice(["gr_ST_T", "gr_ST_F"]))
+            engagement_groups.append(random.choice(["gr_DT_F", "gr_DT_T"]))
             bridge.restPOST("/v3/externalIds", [external_id])
             bridge.restPOST(
                     "/v3/participants",
