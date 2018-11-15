@@ -16,13 +16,14 @@ def filter_identifiers(records):
     identifiers = [
             'subj_name', 'phone', 'emergency_contact', 'emerphone', 'email',
             'street1', 'street2', 'city', 'state', 'zipcode', 'dob']
-    records = records.drop(identifiers, axis = 1)
+    if any([i in records.columns for i in identifiers]):
+        records = records.drop(identifiers, axis = 1)
     return records
 
 
 def store_to_synapse(records):
     syn = sc.login()
-    records.to_csv("exported_records.csv", index = False)
+    records.to_csv("exported_records.csv")
     f = sc.File("exported_records.csv", parent = SYNAPSE_PARENT)
     syn.store(f)
 
