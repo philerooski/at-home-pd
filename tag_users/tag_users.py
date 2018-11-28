@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import synapseclient as sc
 import bridgeclient as bc
+import os
 
 
 BRIDGE_STUDY = "sage-mpower-2"
@@ -85,7 +86,7 @@ def main():
     bridge = bc.bridgeConnector(credentials['bridgeUsername'],
                                 credentials['bridgePassword'],
                                 study = BRIDGE_STUDY)
-    syn = sc.login(credentials['synapseUsername'], credentials['synapsePassword')
+    syn = sc.login(credentials['synapseUsername'], credentials['synapsePassword'])
     all_participants = tag_users(syn, bridge)
     push_to_synapse(syn, all_participants)
 
