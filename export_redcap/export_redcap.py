@@ -1,6 +1,7 @@
 import argparse
 import redcap
 import synapseclient as sc
+import os
 
 SYNAPSE_PARENT = "syn16809549"
 
