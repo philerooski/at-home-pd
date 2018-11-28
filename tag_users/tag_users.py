@@ -21,6 +21,15 @@ def read_args():
     return(args)
 
 
+def get_env_var_credentials():
+    credentials = {}
+    credentials['synapseUsername'] = os.getenv('synapseUsername')
+    credentials['synapsePassword'] = os.getenv('synapsePassword')
+    credentials['bridgeUsername'] = os.getenv('bridgeUsername')
+    credentials['bridgePassword'] = os.getenv('bridgePassword')
+    return credentials
+
+
 def tag_users(syn, bridge):
     all_participants = syn.tableQuery("select * from {}".format(
         HEALTH_DATA_SUMMARY_TABLE)).asDataFrame()
@@ -71,11 +80,12 @@ def push_to_synapse(syn, all_participants):
 
 
 def main():
-    args = read_args()
-    bridge = bc.bridgeConnector(args.bridgeUsername,
-                                args.bridgePassword,
+    # args = read_args()
+    credentials = get_env_var_credentials()
+    bridge = bc.bridgeConnector(credentials['bridgeUsername'],
+                                credentials['bridgePassword'],
                                 study = BRIDGE_STUDY)
-    syn = sc.login(args.synapseUsername, args.synapsePassword)
+    syn = sc.login(credentials['synapseUsername'], credentials['synapsePassword')
     all_participants = tag_users(syn, bridge)
     push_to_synapse(syn, all_participants)
 
