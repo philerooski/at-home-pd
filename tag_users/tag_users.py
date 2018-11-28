@@ -2,6 +2,7 @@ import argparse
 import pandas as pd
 import synapseclient as sc
 import bridgeclient as bc
+import os
 
 
 BRIDGE_STUDY = "sage-mpower-2"
