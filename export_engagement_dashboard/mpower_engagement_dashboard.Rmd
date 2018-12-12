@@ -165,7 +165,9 @@ active_activities_by_user %>%
 day_one <- lubridate::as_date(min(health_data_summary$uploadDate))
 health_data_summary <- health_data_summary %>% 
   mutate(study_week = floor(as.numeric(uploadDate - day_one, units = "weeks")) + 1,
-         study_day = floor(as.numeric(uploadDate - day_one, units = "days")) + 1)
+         hour_of_day = lubridate::hour(
+           lubridate::as_datetime(createdOn / 1000) +
+           lubridate::hours(createdOnTimeZone / 100)))
 ```
 
 ```{r echo=FALSE, fig.width=8, fig.height=3}
@@ -174,8 +176,22 @@ health_data_summary %>%
   geom_bar() +
   labs(title = "Activity by Week", x = "", y = "")
 health_data_summary %>% 
-  ggplot(aes(study_day)) +
-  geom_bar() +
-  labs(title = "Activity by Day", x = "", y = "")
+  ggplot(aes(hour_of_day)) +
+  geom_density() +
+  labs(title = "Activity by Hour of Day", x = "", y = "") +
+  theme(axis.text.y=element_blank()) +
+  scale_x_continuous(limits = c(0, 23)) 
 ```
 
+
+```{r echo=FALSE, fig.width=8, fig.height=4}
+health_data_summary %>% 
+  filter(originalTable != "sms-messages-sent-from-bridge-v1") %>%
+  mutate(task = str_replace(originalTable, "-v\\d", "")) %>% 
+  group_by(task) %>% 
+  count() %>% 
+  ggplot(aes(reorder(task, -n), n)) +
+  geom_bar(stat = "identity") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  labs(title = "Task Count", x = "", y = "") 
+```
