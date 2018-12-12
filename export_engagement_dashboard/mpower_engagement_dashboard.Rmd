@@ -1,0 +1,181 @@
+---
+title: "mPower Engagement Summary"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+```{r include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8) 
+```
+
+```{r include=FALSE}
+library(synapser)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+synLogin()
+```
+
+```{r include=FALSE}
+health_data_summary <- as_tibble(
+  synTableQuery(paste("select * from syn17015960",
+                      "WHERE dataGroups NOT LIKE '%test%'"))$asDataFrame()) %>% 
+  select(-ROW_ID, -ROW_VERSION) %>% 
+  mutate(uploadDate = lubridate::as_date(uploadDate))
+last_update <- max(health_data_summary$uploadDate)
+number_participants <- nrow(distinct(health_data_summary, healthCode))
+number_ios <- health_data_summary %>%
+  filter(grepl("iPhone", phoneInfo)) %>%
+  distinct(healthCode) %>%
+  nrow()
+number_activities <- health_data_summary %>% n_distinct(.$recordId)
+summary <- tibble(
+  a = c("Last Update", "No. Participants", "No. iOS Participants", "No. Activities"),
+  b = c(as.character(last_update), number_participants, number_ios, number_activities))
+colnames(summary) <- NULL
+```
+
+
+```{r, include=FALSE}
+br_ad <- health_data_summary %>%
+  filter(grepl("gr_BR_AD", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+br_ii <- health_data_summary %>%
+  filter(grepl("gr_BR_II", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+avg_num_activities_ad <- health_data_summary %>%
+  filter(grepl("gr_BR_AD", dataGroups)) %>%
+  dplyr::summarise(avg = nrow(.) / n_distinct(healthCode)) %>% 
+  as.numeric() %>% 
+  round(digits = 1)
+avg_num_activities_ii <- health_data_summary %>%
+  filter(grepl("gr_BR_II", dataGroups)) %>%
+  dplyr::summarise(avg = nrow(.) / n_distinct(healthCode)) %>% 
+  as.numeric() %>% 
+  round(digits = 1)
+daily_tracking_true <- health_data_summary %>%
+  filter(grepl("gr_DT_T", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+daily_tracking_false <- health_data_summary %>%
+  filter(grepl("DT_F", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+social_contract_cs <- health_data_summary %>%
+  filter(grepl("gr_SC_CS", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+social_contract_db <- health_data_summary %>%
+  filter(grepl("gr_SC_DB", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+self_tracking_true <- health_data_summary %>%
+  filter(grepl("gr_ST_T", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+self_tracking_false <- health_data_summary %>%
+  filter(grepl("gr_ST_F", dataGroups)) %>%
+  distinct(healthCode) %>%
+  nrow() %>% 
+  as.integer()
+data_group_summary <- tibble(
+  a = c("BR_AD", "BR_II", "Average No. Activities AD", "Average No. Activities II",
+        "Daily Tracking True", "Daily Tracking False", "Social Contract CS",
+        "Social Contract DB", "Self Tracking True", "Self Tracking False"),
+  b = as.character(c(br_ad, br_ii, avg_num_activities_ad, avg_num_activities_ii,
+        daily_tracking_true, daily_tracking_false, social_contract_cs,
+        social_contract_db, self_tracking_true, self_tracking_false)))
+colnames(data_group_summary) <- NULL
+```
+
+```{r echo=FALSE}
+kable(summary) %>% kable_styling(bootstrap_options = "striped",
+                                 full_width = F,
+                                 position = "center")
+kable(data_group_summary) %>% kable_styling(bootstrap_options = "striped",
+                                            full_width = F,
+                                            position = "center")
+```
+
+```{r include=FALSE}
+activities_by_day <- as_tibble(synTableQuery(paste(
+  "select \"uploadDate\",",
+  "replace(replace(replace(replace(originalTable, '-v1',''),'-v2',''), '-v3',''), '-v4', '')",
+  "as task from syn17015960 WHERE dataGroups NOT LIKE '%test%'"))$asDataFrame()) %>% 
+  select(-ROW_ID, -ROW_VERSION) %>% 
+  filter(task != "sms-messages-sent-from-bridge") %>% 
+  mutate(uploadDate = lubridate::as_date(uploadDate))
+```
+
+```{r echo=FALSE}
+activities_by_day %>% 
+  ggplot(aes(uploadDate)) +
+  geom_bar(aes(fill = task)) +
+  labs(title="Activities by Day", x = "", y = "")
+```
+
+
+```{r include=FALSE}
+activities_by_user <- as_tibble(synTableQuery(paste(
+  "select \"externalId\",",
+  "replace(replace(replace(replace(originalTable, '-v1',''),'-v2',''), '-v3',''), '-v4', '')",
+  "as task from syn17015960 WHERE dataGroups NOT LIKE '%test%'"))$asDataFrame()) %>% 
+  select(-ROW_ID, -ROW_VERSION) %>% 
+  filter(task != "sms-messages-sent-from-bridge")
+```
+
+```{r echo=FALSE}
+activities_by_user %>% 
+  ggplot(aes(externalId)) +
+  geom_bar(aes(fill = task)) +
+  labs(title = "Activities by User", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+
+```{r include=FALSE}
+active_activities_by_user <- as_tibble(synTableQuery(paste(
+  "select \"externalId\",",
+  "replace(replace(replace(replace(originalTable, '-v1',''),'-v2',''), '-v3',''), '-v4', '')",
+  "as task from syn17015960 WHERE dataGroups NOT LIKE '%test%'"))$asDataFrame()) %>% 
+  select(-ROW_ID, -ROW_VERSION) %>% 
+  filter(task %in% c("WalkAndBalance", "Tremor", "Tapping"))
+```
+
+```{r echo=FALSE}
+active_activities_by_user %>% 
+  ggplot(aes(externalId)) +
+  geom_bar(aes(fill = task)) +
+  labs(title = "Active Tasks", x = "", y = "") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+```{r include=FALSE}
+day_one <- lubridate::as_date(min(health_data_summary$uploadDate))
+health_data_summary <- health_data_summary %>% 
+  mutate(study_week = floor(as.numeric(uploadDate - day_one, units = "weeks")) + 1,
+         study_day = floor(as.numeric(uploadDate - day_one, units = "days")) + 1)
+```
+
+```{r echo=FALSE, fig.width=8, fig.height=3}
+health_data_summary %>% 
+  ggplot(aes(study_week)) +
+  geom_bar() +
+  labs(title = "Activity by Week", x = "", y = "")
+health_data_summary %>% 
+  ggplot(aes(study_day)) +
+  geom_bar() +
+  labs(title = "Activity by Day", x = "", y = "")
+```
+
