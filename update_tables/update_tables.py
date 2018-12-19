@@ -1,6 +1,7 @@
 import synapseclient as sc
 import synapseutils as su
 import pandas as pd
+import numpy as np
 import os
 
 
@@ -63,6 +64,37 @@ def copy_file_handles(syn, new_records, source):
     return new_records
 
 
+def parse_date(i):
+    str_i = str(i)
+    if "nan" == str_i:
+        str_i = None
+    else:
+        str_i = str_i[:-2]
+    return str_i
+
+def parse_float_to_int(i):
+    str_i = str(i)
+    if "nan" == str_i:
+        str_i = None
+    elif str_i.endswith(".0"):
+        str_i = str_i[:-2]
+    return(str_i)
+
+def sanitize_table(syn, target, records):
+    cols = syn.getTableColumns(target)
+    for c in cols:
+        if c['columnType'] == 'STRING':
+            if ('timezone' in c['name'] and
+                type(records[c['name']].iloc[0]) is np.float64):
+                records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
+        if (c['columnType'] == 'INTEGER' and
+            type(records[c['name']].iloc[0]) is np.float64):
+            records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
+        if c['columnType'] == 'DATE':
+            records[c['name']] = list(map(parse_date, records[c['name']]))
+    return records
+
+
 def update_tables(syn, relevant_external_ids):
     for source, target in TABLE_MAPPINGS.items():
         external_ids_str = "('{}')".format("', '".join(relevant_external_ids))
@@ -76,6 +108,7 @@ def update_tables(syn, relevant_external_ids):
                 source_table.index.difference(target_table.index)]
         if len(new_records): # new records found from the relevant external ids
             new_records = copy_file_handles(syn, new_records, source)
+            new_records = sanitize_table(syn, target, new_records)
             new_target_table = sc.Table(target, new_records.values.tolist())
             syn.store(new_target_table, used = source)
 
