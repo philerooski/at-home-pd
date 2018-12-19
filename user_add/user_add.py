@@ -60,7 +60,10 @@ def get_new_users(syn, input_table = INPUT_TABLE, output_table = OUTPUT_TABLE):
     output_table_df = output_table_df.set_index(["phone_number", "guid"], drop = False)
     new_numbers = set(input_table_df.index.values).difference(
             output_table_df.index.values)
-    return input_table_df.loc[list(new_numbers)]
+    if len(new_numbers):
+        return input_table_df.loc[list(new_numbers)]
+    else:
+        return input_table_df.drop(input_table_df.index)
 
 
 def get_bridge_client(bridge_username, bridge_password, study="sage-mpower-2"):
