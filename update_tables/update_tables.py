@@ -110,7 +110,11 @@ def update_tables(syn, relevant_external_ids):
             new_records = copy_file_handles(syn, new_records, source)
             new_records = sanitize_table(syn, target, new_records)
             new_target_table = sc.Table(target, new_records.values.tolist())
-            syn.store(new_target_table, used = source)
+            try:
+                syn.store(new_target_table, used = source)
+            except:
+                print(source)
+                print(new_records)
 
 
 def main():
