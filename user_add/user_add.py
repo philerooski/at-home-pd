@@ -60,7 +60,10 @@ def get_new_users(syn, input_table = INPUT_TABLE, output_table = OUTPUT_TABLE):
     output_table_df = output_table_df.set_index(["phone_number", "guid"], drop = False)
     new_numbers = set(input_table_df.index.values).difference(
             output_table_df.index.values)
-    return input_table_df.loc[list(new_numbers)]
+    if len(new_numbers):
+        return input_table_df.loc[list(new_numbers)]
+    else:
+        return input_table_df.drop(input_table_df.index)
 
 
 def get_bridge_client(bridge_username, bridge_password, study="sage-mpower-2"):
@@ -86,7 +89,10 @@ def process_request(bridge, participant_info, phone_number, external_id):
             engagement_groups.append(random.choice(["gr_BR_AD", "gr_BR_II"]))
             engagement_groups.append(random.choice(["gr_ST_T", "gr_ST_F"]))
             engagement_groups.append(random.choice(["gr_DT_F", "gr_DT_T"]))
-            bridge.restPOST("/v3/externalIds", [external_id])
+            bridge.restPOST(
+                    "/v4/externalids",
+                    {"identifier": external_id,
+                     "substudyId": "at-home-pd"})
             bridge.restPOST(
                     "/v3/participants",
                     {"externalId": external_id,
@@ -104,7 +110,10 @@ def process_request(bridge, participant_info, phone_number, external_id):
         try:
             # add external_id and then assign to existing account
             user_id = participant_info['items'][0]['id']
-            bridge.restPOST("/v3/externalIds", [external_id])
+            bridge.restPOST(
+                    "/v4/externalids",
+                    {"identifier": external_id,
+                     "substudyId": "at-home-pd"})
             bridge.restPOST(
                     "/v3/participants/{}".format(user_id),
                     {"externalId": external_id,
