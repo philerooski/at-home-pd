@@ -89,7 +89,10 @@ def process_request(bridge, participant_info, phone_number, external_id):
             engagement_groups.append(random.choice(["gr_BR_AD", "gr_BR_II"]))
             engagement_groups.append(random.choice(["gr_ST_T", "gr_ST_F"]))
             engagement_groups.append(random.choice(["gr_DT_F", "gr_DT_T"]))
-            bridge.restPOST("/v3/externalIds", [external_id])
+            bridge.restPOST(
+                    "/v4/externalids",
+                    {"identifier": external_id,
+                     "substudyId": "at-home-pd"})
             bridge.restPOST(
                     "/v3/participants",
                     {"externalId": external_id,
@@ -107,7 +110,10 @@ def process_request(bridge, participant_info, phone_number, external_id):
         try:
             # add external_id and then assign to existing account
             user_id = participant_info['items'][0]['id']
-            bridge.restPOST("/v3/externalIds", [external_id])
+            bridge.restPOST(
+                    "/v4/externalids",
+                    {"identifier": external_id,
+                     "substudyId": "at-home-pd"})
             bridge.restPOST(
                     "/v3/participants/{}".format(user_id),
                     {"externalId": external_id,
