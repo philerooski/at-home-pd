@@ -43,17 +43,21 @@ def copy_file_handles(syn, new_records, source):
     for c in cols:
         if c['columnType'] == 'FILEHANDLEID':
             fhids_to_copy = new_records[c['name']].dropna().astype(int).tolist()
-            new_fhids = su.copyFileHandles(
-                    syn = syn,
-                    fileHandles = fhids_to_copy,
-                    associateObjectTypes = ["TableEntity"] * len(fhids_to_copy),
-                    associateObjectIds = [source] * len(fhids_to_copy),
-                    contentTypes = ["application/json"] * len(fhids_to_copy),
-                    fileNames = [None] * len(fhids_to_copy))
+            new_fhids = []
+            for i in range(0, len(fhids_to_copy), 100):
+                fhids_to_copy_i = fhids_to_copy[i:i+100]
+                new_fhids_i = su.copyFileHandles(
+                        syn = syn,
+                        fileHandles = fhids_to_copy_i,
+                        associateObjectTypes = ["TableEntity"] * len(fhids_to_copy_i),
+                        associateObjectIds = [source] * len(fhids_to_copy_i),
+                        contentTypes = ["application/json"] * len(fhids_to_copy_i),
+                        fileNames = [None] * len(fhids_to_copy_i))
+                for j in [int(i['newFileHandle']['id']) for i in new_fhids_i['copyResults']]:
+                    new_fhids.append(j)
             new_fhids = pd.DataFrame(
                     {c['name']: fhids_to_copy,
-                     "new_fhids": [int(i['newFileHandle']['id']) for i in
-                                        new_fhids['copyResults']]})
+                     "new_fhids": new_fhids})
             new_records = new_records.merge(new_fhids, how='left', on=c['name'])
             new_records[c['name']] = new_records['new_fhids']
             new_records = new_records.drop("new_fhids", axis = 1)
