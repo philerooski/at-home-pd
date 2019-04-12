@@ -25,9 +25,11 @@ def get_env_var_credentials():
 def filter_identifiers(records):
     identifiers = [
             'subj_name', 'phone', 'emergency_contact', 'emerphone', 'email',
-            'street1', 'street2', 'city', 'state', 'zipcode', 'dob']
-    if any([i in records.columns for i in identifiers]):
-        records = records.drop(identifiers, axis = 1)
+            'street1', 'street2', 'city', 'state', 'zipcode', 'dob',
+	    'num_type']
+    present_identifiers = [i for i in identifiers if i in records.columns]
+    if len(present_identifiers):
+        records = records.drop(present_identifiers, axis = 1)
     return records
 
 
@@ -38,7 +40,7 @@ def store_to_synapse(syn, records):
 
 
 def main():
-    # args = read_args()
+    #credentials = read_args()
     credentials = get_env_var_credentials()
     syn = sc.login(credentials['synapseUsername'],
                    credentials['synapsePassword'])
