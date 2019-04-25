@@ -25,17 +25,16 @@ def get_env_var_credentials():
 def filter_identifiers(records):
     identifiers = [
             'subj_name', 'phone', 'emergency_contact', 'emerphone', 'email',
-            'street1', 'street2', 'city', 'state', 'zipcode', 'dob',
-	    'num_type']
+            'street1', 'street2', 'city', 'state', 'zipcode', 'num_type']
     present_identifiers = [i for i in identifiers if i in records.columns]
     if len(present_identifiers):
         records = records.drop(present_identifiers, axis = 1)
     return records
 
 
-def store_to_synapse(syn, records):
-    records.to_csv("exported_records.csv")
-    f = sc.File("exported_records.csv", parent = SYNAPSE_PARENT)
+def store_to_synapse(syn, records, name):
+    records.to_csv(name)
+    f = sc.File(name, parent = SYNAPSE_PARENT)
     syn.store(f)
 
 
@@ -46,9 +45,12 @@ def main():
                    credentials['synapsePassword'])
     proj = redcap.Project(url = credentials['redcapURL'],
                           token = credentials['redcapToken'])
-    exported_records = proj.export_records(raw_or_label = "label", format = "df")
-    exported_records = filter_identifiers(exported_records)
-    store_to_synapse(syn, exported_records)
+    exported_records_label = proj.export_records(raw_or_label = "label", format = "df")
+    exported_records_raw = proj.export_records(raw_or_label = "raw", format = "df")
+    exported_records_label = filter_identifiers(exported_records_label)
+    exported_records_raw = filter_identifiers(exported_records_raw)
+    store_to_synapse(syn, exported_records_label, "exported_records.csv")
+    store_to_synapse(syn, exported_records_raw, "exported_records_raw.csv")
 
 
 if __name__ == "__main__":
