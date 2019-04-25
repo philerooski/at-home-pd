@@ -96,6 +96,8 @@ def sanitize_table(syn, target, records):
             records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
         if c['columnType'] == 'DATE':
             records[c['name']] = list(map(parse_date, records[c['name']]))
+        if c['columnType'] == 'FILEHANDLEID':
+            records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
     return records
 
 
@@ -116,9 +118,10 @@ def update_tables(syn, relevant_external_ids):
             new_target_table = sc.Table(target, new_records.values.tolist())
             try:
                 syn.store(new_target_table, used = source)
-            except:
+            except Exception as e:
                 print(source)
                 print(new_records)
+                raise(e)
 
 
 def main():
