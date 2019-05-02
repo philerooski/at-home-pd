@@ -67,15 +67,6 @@ def copy_file_handles(syn, new_records, source):
                     None if pd.isnull(i) else i for i in new_records[c['name']]]
     return new_records
 
-
-def parse_date(i):
-    str_i = str(i)
-    if "nan" == str_i:
-        str_i = None
-    else:
-        str_i = str_i[:-2]
-    return str_i
-
 def parse_float_to_int(i):
     str_i = str(i)
     if "nan" == str_i:
@@ -91,11 +82,10 @@ def sanitize_table(syn, target, records):
             if ('timezone' in c['name'] and
                 type(records[c['name']].iloc[0]) is np.float64):
                 records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
-        if (c['columnType'] == 'INTEGER' and
+        if ((c['columnType'] == 'INTEGER' or c['columnType'] == "DATE") and
+            len(records[c['name']]) and
             type(records[c['name']].iloc[0]) is np.float64):
             records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
-        if c['columnType'] == 'DATE':
-            records[c['name']] = list(map(parse_date, records[c['name']]))
         if c['columnType'] == 'FILEHANDLEID':
             records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
     return records
