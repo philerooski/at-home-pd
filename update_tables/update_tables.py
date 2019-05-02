@@ -78,7 +78,6 @@ def parse_float_to_int(i):
 def sanitize_table(syn, target, records):
     cols = syn.getTableColumns(target)
     for c in cols:
-        print(records[c['name']])
         if c['columnType'] == 'STRING':
             if ('timezone' in c['name'] and
                 type(records[c['name']].iloc[0]) is np.float64):
