@@ -1,28 +1,28 @@
 library(synapser)
 library(tidyverse)
 
-MJFF_USERS <- "syn17098120"
+MJFF_USERS <- "syn18680002"
 ROCHESTER_USERS <- "syn17051543"
 BRIDGE_USERS <- "syn16786935"
 ROCHESTER_PARENT <- "syn18637131"
 MJFF_PARENT <- "syn18637133"
 BRIDGE_PARENT <- "syn12617210"
 DEIDENTIFIED_DATA_OFFSET <- "syn18637903"
+MJFF_ORIGINALS_W_IDENTIFIER <- "syn18678038"
 BRIDGE_MAPPING <- list(
-    "syn17015960" = "syn18675655",
-    "syn17015065" = "syn18675656",
-    "syn17014786" = "syn18675655",
-    "syn17014785" = "syn18675658",
-    "syn17014784" = "syn18675659",
-    "syn17014782" = "syn18675660",
-    "syn17014783" = "syn18675661",
-    "syn17014781" = "syn18675662",
-    "syn17014780" = "syn18675663",
-    "syn17014779" = "syn18675664",
-    "syn17014778" = "syn18675665",
-    "syn17014777" = "syn18675666",
-    "syn17014776" = "syn18675667",
-    "syn17014775" = "syn18675668")
+    "syn17015960" = "syn18681888",
+    "syn17015065" = "syn18681890",
+    "syn17014786" = "syn18681891",
+    "syn17014785" = "syn18681893",
+    "syn17014784" = "syn18681894",
+    "syn17014783" = "syn18681898",
+    "syn17014781" = "syn18681899",
+    "syn17014780" = "syn18681900",
+    "syn17014779" = "syn18681901",
+    "syn17014778" = "syn18681902",
+    "syn17014777" = "syn18681903",
+    "syn17014776" = "syn18681904",
+    "syn17014775" = "syn18681905")
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {
   f <- synGet(syn_id)
@@ -33,20 +33,19 @@ read_syn_csv <- function(syn_id, encoding = "UTF-8") {
 read_syn_table <- function(syn_id) {
   q <- synTableQuery(paste("select * from", syn_id))
   table <- q$asDataFrame() %>% 
-    as_tibble() #%>% 
-    #select(-ROW_ID, -ROW_VERSION)
+    as_tibble() %>% 
+    select(-ROW_ID, -ROW_VERSION)
   return(table)
 }
 
 curate_user_list <- function() {
   mjff_users <- read_syn_csv(MJFF_USERS) %>% 
-    distinct(guid = as.character(user_id)) %>%
+    distinct(guid) %>%
     mutate(source = "MJFF")
   rochester_users <- read_syn_csv(ROCHESTER_USERS) %>% 
     distinct(guid) %>% 
     mutate(source = "ROCHESTER")
   bridge_users <- read_syn_table(BRIDGE_USERS) %>% 
-    select(-ROW_ID, -ROW_VERSION) %>% 
     distinct(guid) %>% 
     mutate(source = "BRIDGE")
   users <- bind_rows(mjff_users, rochester_users, bridge_users)
@@ -58,46 +57,16 @@ curate_user_list <- function() {
 }
 
 perturb_mjff_dates <- function(users) {
-  mjff <- list(
-    "syn17098113"= read_syn_csv("syn17098113"),
-    "syn17098115" = read_syn_csv("syn17098115"),
-    "syn17098116" = read_syn_csv("syn17098116"),
-    "syn17098117" = read_syn_csv("syn17098117"),
-    "syn17098119" = read_syn_csv("syn17098119"),
-    "syn17098120" = read_syn_csv("syn17098120"),
-    "syn17098121" = read_syn_csv("syn17098121"),
-    "syn17098122" = read_syn_csv("syn17098122"),
-    "syn17098123" = read_syn_csv("syn17098123"),
-    "syn17098124" = read_syn_csv("syn17098124"),
-    "syn17098125" = read_syn_csv("syn17098125"),
-    "syn17098126" = read_syn_csv("syn17098126"),
-    "syn17098127" = read_syn_csv("syn17098127"),
-    "syn17098128" = read_syn_csv("syn17098128"),
-    "syn17098129" = read_syn_csv("syn17098129"),
-    "syn17098130" = read_syn_csv("syn17098130"),
-    "syn17098131" = read_syn_csv("syn17098131"),
-    "syn17098132" = read_syn_csv("syn17098132"),
-    "syn17098133" = read_syn_csv("syn17098133"),
-    "syn17098134" = read_syn_csv("syn17098134"),
-    "syn17098135" = read_syn_csv("syn17098135"),
-    "syn17098136" = read_syn_csv("syn17098136"),
-    "syn17098137" = read_syn_csv("syn17098137"),
-    "syn17098138" = read_syn_csv("syn17098138"),
-    "syn17098139" = read_syn_csv("syn17098139"),
-    "syn17098140" = read_syn_csv("syn17098140"),
-    "syn17098141" = read_syn_csv("syn17098141"),
-    "syn17098142" = read_syn_csv("syn17098142"),
-    "syn17098143" = read_syn_csv("syn17098143"),
-    "syn17098144" = read_syn_csv("syn17098144"),
-    "syn17098145" = read_syn_csv("syn17098145"),
-    "syn17098146" = read_syn_csv("syn17098146", encoding = "ISO-8859-1"),
-    "syn17098147" = read_syn_csv("syn17098147"))
+  mjff <- synGetChildren("syn18678038")$asList()
+  names(mjff) <- purrr::map(mjff, ~ .$id)
+  mjff <- purrr::map(mjff, ~ read_syn_csv(.$id))
+  mjff$syn18680002 <- NULL # users.csv
   mjff_perturbed <- purrr::map(mjff, function(df) {
     perturb_dates(
       df = df,
       users = users,
       source_name = "MJFF",
-      guid = "user_id")
+      guid = "guid")
   })
 }
 
@@ -130,8 +99,10 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
   if (!is.null(table_mapping)) {
     deidentified_bridge <- purrr::map(table_mapping, read_syn_table)
     bridge <- purrr::map(names(bridge), function(source_id) {
-      source_table <- bridge[[source_id]]
-      target_table <- deidentified_bridge[[source_id]]
+      source_table <- bridge[[source_id]] %>% 
+        mutate(recordId = as.character(recordId))
+      target_table <- deidentified_bridge[[source_id]] %>% 
+        mutate(recordId = as.character(recordId))
       new_records <- anti_join(source_table, target_table, by = "recordId")
       return(new_records)
     })
@@ -184,7 +155,7 @@ store_rochester_perturbed <- function(rochester_dataset) {
   fname <- "deidentified_exported_records.csv"
   write_csv(rochester_dataset, fname)
   f <- synapser::File(fname, parent = ROCHESTER_PARENT)
-  synStore(f)
+  synStore(f, used = list(ROCHESTER_USERS))
 }
 
 store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
@@ -193,14 +164,14 @@ store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
     fname <- paste0("deidentified_", file_info$properties$name)
     write_csv(.y, fname)
     f <- synapser::File(fname, parent = MJFF_PARENT)
-    synStore(f)
+    synStore(f, used = list(.x))
   })
 }
 
 store_bridge_perturbed <- function(bridge_dataset, table_mapping=NULL) {
   if (!is.null(table_mapping)) {
     purrr::pmap(list(table_mapping, bridge_dataset, names(table_mapping)),
-                ~ synStore(Table(.x, .y), used = ..3))
+                function(x, y, source) {print(list(x, y, source)); synStore(Table(x, y), used = list(source))})
   }
   else {
     purrr::map2(names(bridge_dataset), bridge_dataset, function(.x, .y) {
@@ -209,14 +180,14 @@ store_bridge_perturbed <- function(bridge_dataset, table_mapping=NULL) {
                       table_info$properties$name)
       table_cols <- synGetTableColumns(.x)$asList()
       schema <- Schema(name = tname, columns = table_cols, parent = BRIDGE_PARENT)
-      synStore(Table(schema, .y), used = .x)
+      synStore(Table(schema, .y), used = list(.x))
     })
   }
 }
 
 update_user_list <- function(users) {
   existing_users <- read_syn_table(DEIDENTIFIED_DATA_OFFSET) %>%
-    select(-ROW_ID, -ROW_VERSION)
+    mutate(guid = as.character(guid))
   new_users <- anti_join(users, existing_users, by = "guid")
   if (nrow(new_users) > 0) {
     updated_table <- synStore(Table(DEIDENTIFIED_DATA_OFFSET, new_users))
@@ -233,10 +204,10 @@ main <- function() {
     update_user_list()
   rochester_dataset <- perturb_rochester_dates(users)
   mjff_dataset <- perturb_mjff_dates(users)
-  bridge_dataset <- perturb_bridge_dates(users, table_mapping = BRIDGE_MAPPING)
+  bridge_dataset <- perturb_bridge_dates(users, table_mapping = NULL)
   store_rochester_perturbed(rochester_dataset)
   store_mjff_perturbed(mjff_dataset)
-  store_bridge_perturbed(bridge_dataset, table_mapping = BRIDGE_MAPPING)
+  store_bridge_perturbed(bridge_dataset, table_mapping = NULL)
 }
 
 main()
