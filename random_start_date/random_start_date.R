@@ -22,7 +22,8 @@ BRIDGE_MAPPING <- list(
     "syn17014778" = "syn18681902",
     "syn17014777" = "syn18681903",
     "syn17014776" = "syn18681904",
-    "syn17014775" = "syn18681905")
+    "syn17014775" = "syn18681905",
+    "syn17014782" = "syn18683083")
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {
   f <- synGet(syn_id)
@@ -98,7 +99,7 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
     "syn17014775" = read_syn_table("syn17014775"))
   if (!is.null(table_mapping)) {
     deidentified_bridge <- purrr::map(table_mapping, read_syn_table)
-    bridge <- purrr::map(names(bridge), function(source_id) {
+    bridge_diff <- purrr::map(names(bridge), function(source_id) {
       source_table <- bridge[[source_id]] %>% 
         mutate(recordId = as.character(recordId))
       target_table <- deidentified_bridge[[source_id]] %>% 
@@ -106,18 +107,19 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       new_records <- anti_join(source_table, target_table, by = "recordId")
       return(new_records)
     })
+  names(bridge_diff) <- names(bridge)
   }
-  bridge_perturbed <- purrr::map(bridge, function(df) {
+  bridge_perturbed <- purrr::map(bridge_diff, function(df) {
     df <- df %>%
       mutate(uploadDate = lubridate::as_date(uploadDate),
-             createdOn = lubridate::as_datetime(createdOn / 1000))
+             createdOn = lubridate::as_datetime(createdOn))
     if (has_name(df, "metadata.startDate")) {
       df <- df %>% 
-        mutate(metadata.startDate = lubridate::as_datetime(metadata.startDate / 1000))
+        mutate(metadata.startDate = lubridate::as_datetime(metadata.startDate))
     }
     if (has_name(df, "metadata.endDate")) {
       df <- df %>% 
-        mutate(metadata.endDate = lubridate::as_datetime(metadata.endDate / 1000))
+        mutate(metadata.endDate = lubridate::as_datetime(metadata.endDate))
     }
     perturb_dates(
       df = df,
@@ -170,8 +172,12 @@ store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
 
 store_bridge_perturbed <- function(bridge_dataset, table_mapping=NULL) {
   if (!is.null(table_mapping)) {
-    purrr::pmap(list(table_mapping, bridge_dataset, names(table_mapping)),
-                function(x, y, source) {print(list(x, y, source)); synStore(Table(x, y), used = list(source))})
+    purrr::map2(bridge_dataset, names(bridge_dataset), function(df, source) {
+      if (nrow(df) > 0) {
+        target <- table_mapping[[source]]
+        synStore(Table(target, df), used = list(source))
+      }
+    })
   }
   else {
     purrr::map2(names(bridge_dataset), bridge_dataset, function(.x, .y) {
@@ -204,10 +210,10 @@ main <- function() {
     update_user_list()
   rochester_dataset <- perturb_rochester_dates(users)
   mjff_dataset <- perturb_mjff_dates(users)
-  bridge_dataset <- perturb_bridge_dates(users, table_mapping = NULL)
+  bridge_dataset <- perturb_bridge_dates(users, table_mapping = BRIDGE_MAPPING)
   store_rochester_perturbed(rochester_dataset)
   store_mjff_perturbed(mjff_dataset)
-  store_bridge_perturbed(bridge_dataset, table_mapping = NULL)
+  store_bridge_perturbed(bridge_dataset, table_mapping = BRIDGE_MAPPING)
 }
 
-main()
+#main()
