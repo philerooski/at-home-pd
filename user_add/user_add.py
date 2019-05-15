@@ -8,13 +8,15 @@ import os
 import re
 from botocore.exceptions import ClientError
 
-INPUT_TABLE = "syn16784393"
-OUTPUT_TABLE = "syn16786935"
+INPUT_TABLE = "syn16784393" # at-home-pd
+OUTPUT_TABLE = "syn16786935" # at-home-pd
 
 def read_args():
     # for testing
     import argparse
     parser = argparse.ArgumentParser()
+    parser.add_argument("--inputTable", default = INPUT_TABLE)
+    parser.add_argument("--outputTable", default = OUTPUT_TABLE)
     parser.add_argument("--bridgeUsername")
     parser.add_argument("--bridgePassword")
     parser.add_argument("--synapseUsername")
@@ -25,6 +27,8 @@ def read_args():
 
 def get_env_var_credentials():
     credentials = {}
+    credentials['inputTable'] = os.getenv('inputTable')
+    credentials['outputTable'] = os.getenv('outputTable')
     credentials['synapseUsername'] = os.getenv('synapseUsername')
     credentials['synapsePassword'] = os.getenv('synapsePassword')
     credentials['bridgeUsername'] = os.getenv('bridgeUsername')
@@ -32,9 +36,9 @@ def get_env_var_credentials():
     return credentials
 
 
-def delete_na_rows(syn):
+def delete_na_rows(syn, input_table):
     rows_to_delete = syn.tableQuery(
-            "select * from {} where phone_number is null or guid is null".format(INPUT_TABLE))
+            "select * from {} where phone_number is null or guid is null".format(input_table))
     syn.delete(rows_to_delete)
 
 def get_new_users(syn, input_table = INPUT_TABLE, output_table = OUTPUT_TABLE):
@@ -42,13 +46,13 @@ def get_new_users(syn, input_table = INPUT_TABLE, output_table = OUTPUT_TABLE):
             "select * from {}".format(input_table)).asDataFrame()
     for i, user in input_table_df.iterrows():
         if pd.isnull(user.phone_number) and pd.isnull(user.guid):
-            delete_na_rows(syn)
+            delete_na_rows(syn, input_table)
             return ("Error: phone_number and guid was left blank", -1, -1, user.visit_date)
         elif pd.isnull(user.phone_number):
-            delete_na_rows(syn)
+            delete_na_rows(syn, input_table)
             return ("Error: phone_number was left blank", -1, user.guid, user.visit_date)
         elif pd.isnull(user.guid):
-            delete_na_rows(syn)
+            delete_na_rows(syn, input_table)
             return ("Error: guid was left blank", user.phone_number, -1, user.visit_date)
     phone_number_ints = input_table_df.phone_number.apply(get_phone_number_digits)
     input_table_df['phone_number'] = phone_number_ints
@@ -209,7 +213,8 @@ def main():
     credentials = get_env_var_credentials()
     syn = sc.login(email = credentials['synapseUsername'],
                    password = credentials['synapsePassword'])
-    new_users = get_new_users(syn)
+    new_users = get_new_users(syn, input_table = credentials["inputTable"],
+                              output_table = credentials["outputTable"])
     if isinstance(new_users, tuple): # returned error message
         table_row = create_table_row(new_users[0], new_users[1],
                                      new_users[2], new_users[3])
