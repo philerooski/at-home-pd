@@ -195,7 +195,7 @@ def is_valid_phone_number(phone_number):
 
 
 def is_valid_guid(guid):
-    p = re.compile("\w{4}-\w{3}-\w{3}")
+    p = re.compile("(NIH-)?\w{4}-\w{3}-\w{3}")
     match = re.match(p, guid)
     if match is not None:
         return True
