@@ -57,6 +57,7 @@ def get_new_users(syn, input_table = INPUT_TABLE, output_table = OUTPUT_TABLE):
     phone_number_ints = input_table_df.phone_number.apply(get_phone_number_digits)
     input_table_df['phone_number'] = phone_number_ints
     input_table_df['phone_number'] = input_table_df.phone_number.astype(str)
+    input_table_df['guid'] = input_table_df.guid.apply(str.strip)
     input_table_df = input_table_df.set_index(["phone_number", "guid"], drop=False)
     output_table_df = syn.tableQuery(
             "select phone_number, guid from {}".format(output_table)).asDataFrame()
