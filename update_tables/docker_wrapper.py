@@ -16,7 +16,8 @@ def main():
     d = json.loads(r.content)
     if d['status'] == "READ_WRITE":
         os.system("docker run --rm -e synapseUsername={} -e synapsePassword={} "
-                  "philsnyder/at-home-pd:update_tables".format(
+                  "philsnyder/at-home-pd:latest "
+                  "python /root/at-home-pd/update_tables/update_tables.py".format(
                       args.synapseUsername, args.synapsePassword))
 
 if __name__ == "__main__":
