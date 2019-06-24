@@ -18,7 +18,7 @@ def read_args():
 
 def main():
     args = read_args()
-    r = requests.get("https://repo-prod.prod.sagebase.org/repo/v1/admin/synapse/status")
+    r = requests.get("https://repo-prod.prod.sagebase.org/repo/v1/status")
     d = json.loads(r.content)
     if d['status'] == "READ_WRITE":
         os.system("docker run --rm -e synapseUsername={} -e synapsePassword={} "
