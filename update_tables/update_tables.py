@@ -103,6 +103,7 @@ def update_tables(syn, relevant_external_ids):
         except sc.exceptions.SynapseTimeoutError:
             print("{} failed to update because it could not "
                   "be fetched.".format(target))
+            continue
         target_table = target_table.asDataFrame().set_index("recordId", drop=False)
         new_records = source_table.loc[
                 source_table.index.difference(target_table.index)]
