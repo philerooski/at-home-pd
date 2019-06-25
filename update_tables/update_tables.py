@@ -98,7 +98,12 @@ def update_tables(syn, relevant_external_ids):
                 "SELECT * FROM {} WHERE externalId IN {}".format(
                     source, external_ids_str))
         source_table = source_table.asDataFrame().set_index("recordId", drop=False)
-        target_table = syn.tableQuery("select * from {}".format(target))
+        try:
+            target_table = syn.tableQuery("select * from {}".format(target))
+        except sc.exceptions.SynapseTimeoutError:
+            print("{} failed to update because it could not "
+                  "be fetched.".format(target))
+            continue
         target_table = target_table.asDataFrame().set_index("recordId", drop=False)
         new_records = source_table.loc[
                 source_table.index.difference(target_table.index)]
