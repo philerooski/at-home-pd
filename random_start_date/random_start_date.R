@@ -82,12 +82,14 @@ perturb_mjff_dates <- function(users) {
       return(df)
     })
   mjff_perturbed <- purrr::map(mjff, function(df) {
-    perturb_dates(
+    col_order <- names(df)
+    perturbed_dates <- perturb_dates(
       df = df,
       users = users,
       source_name = "MJFF",
       guid = "guid",
       date_cols = date_cols)
+    return(perturbed_dates[col_order])
   })
 }
 
@@ -101,31 +103,34 @@ perturb_rochester_dates <- function(users) {
                  "bl_partburdenblvisitdt", "compliance_dttm", "visstatdttm",
                  "invsigdttm", "stop_dt", "notifdt", "eventdt", "reslvdt",
                  "partburdenv1visitdt")
+  col_order <- names(rochester)
   rochester_perturbed <- perturb_dates(
     df = rochester,
     users = users,
     source_name = "ROCHESTER",
     guid = "guid",
     date_cols = date_cols)
-  return(rochester_perturbed)
+  return(rochester_perturbed[col_order])
 }
 
 perturb_bridge_dates <- function(users, table_mapping = NULL) {
-  bridge <- list(
-    "syn17015960" = read_syn_table("syn17015960"),
-    "syn17015065" = read_syn_table("syn17015065"),
-    "syn17014786" = read_syn_table("syn17014786"),
-    "syn17014785" = read_syn_table("syn17014785"),
-    "syn17014784" = read_syn_table("syn17014784"),
-    "syn17014782" = read_syn_table("syn17014782"),
-    "syn17014783" = read_syn_table("syn17014783"),
-    "syn17014781" = read_syn_table("syn17014781"),
-    "syn17014780" = read_syn_table("syn17014780"),
-    "syn17014779" = read_syn_table("syn17014779"),
-    "syn17014778" = read_syn_table("syn17014778"),
-    "syn17014777" = read_syn_table("syn17014777"),
-    "syn17014776" = read_syn_table("syn17014776"),
-    "syn17014775" = read_syn_table("syn17014775"))
+  bridge_tables <- c("syn17015960","syn17015065","syn17014786",
+                     "syn17014785","syn17014784","syn17014782",
+                     "syn17014783","syn17014781","syn17014780",
+                     "syn17014779","syn17014778","syn17014777",
+                     "syn17014776","syn17014775")
+  expected_tables <- c(bridge_tables, unlist(BRIDGE_MAPPING, use.names=F),
+                       "syn18693245", "syn16784393", "syn16786935", "syn18637903")
+  actual_tables <- synGetChildren(BRIDGE_PARENT, includeTypes=list("table"))$asList() %>% 
+    purrr::map(~ .$id) %>% 
+    unlist()
+  unexpected_tables <- setdiff(actual_tables, expected_tables)
+  if (length(unexpected_tables)) {
+    stop(paste("Unexpected table(s) found in the AT-HOME PD project:",
+               stringr::str_c(unexpected_tables, collapse=", "))) 
+  }
+  bridge <- purrr::map(bridge_tables, read_syn_table)
+  names(bridge) <- bridge_tables
   if (!is.null(table_mapping)) {
     deidentified_bridge <- purrr::map(table_mapping, read_syn_table)
     bridge_diff <- purrr::map(names(bridge), function(source_id) {
@@ -139,6 +144,7 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
   names(bridge_diff) <- names(bridge)
   }
   bridge_perturbed <- purrr::map(bridge_diff, function(df) {
+    col_order <- names(df)
     df <- df %>%
       mutate(uploadDate = lubridate::as_date(uploadDate),
              createdOn = lubridate::as_datetime(createdOn))
@@ -150,11 +156,12 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       df <- df %>% 
         mutate(metadata.endDate = lubridate::as_datetime(metadata.endDate))
     }
-    perturb_dates(
+    bridge_perturbed <- perturb_dates(
       df = df,
       users = users,
       source_name = "BRIDGE",
       guid = "externalId")
+    return(bridge_perturbed[col_order])
     })
   return(bridge_perturbed)
 }
@@ -256,4 +263,4 @@ main <- function() {
   store_bridge_perturbed(bridge_dataset, table_mapping = BRIDGE_MAPPING)
 }
 
-main()
+#main()
