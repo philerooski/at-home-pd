@@ -189,7 +189,7 @@ perturb_dates <- function(df, users, source_name, guid, date_cols=NULL) {
   })
   df_perturbed <- df_perturbed %>%
     bind_cols(df_dates_perturbed) %>% 
-  select(-day_offset)
+    select(-day_offset)
   return(df_perturbed)
 }
 
