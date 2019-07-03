@@ -263,4 +263,4 @@ main <- function() {
   store_bridge_perturbed(bridge_dataset, table_mapping = BRIDGE_MAPPING)
 }
 
-#main()
+main()
