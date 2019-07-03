@@ -62,41 +62,75 @@ perturb_mjff_dates <- function(users) {
   names(mjff) <- purrr::map(mjff, ~ .$id)
   mjff <- purrr::map(mjff, ~ read_syn_csv(.$id))
   mjff$syn18680002 <- NULL # users.csv
+  date_cols <- c("study_visit_start_date", "first_answer_created_at",
+                 "last_answer_created_at", "last_answer_modified_at",
+                 paste("1.1.0 When did you start taking prescription medication",
+                        "to treat your Parkinson's disease?"),
+                 paste("1.1 When were you first diagnosed with Parkinson's disease",
+                       "or parkinsonism (to the best of your memory)?"))
+  mjff_dates <- mjff %>% 
+    purrr::map(function(df) {
+      df <- df %>% 
+        select_if(names(df) %in% date_cols) %>% 
+        purrr::map_dfc(lubridate::as_datetime)
+      return(df)
+    })
+  mjff <- purrr::map2(mjff, mjff_dates, function(df, df_dates) {
+      df <- df %>% 
+        select_if(!(names(df) %in% date_cols)) %>% 
+        bind_cols(df_dates)
+      return(df)
+    })
   mjff_perturbed <- purrr::map(mjff, function(df) {
-    perturb_dates(
+    col_order <- names(df)
+    perturbed_dates <- perturb_dates(
       df = df,
       users = users,
       source_name = "MJFF",
-      guid = "guid")
+      guid = "guid",
+      date_cols = date_cols)
+    return(perturbed_dates[col_order])
   })
 }
 
 perturb_rochester_dates <- function(users) {
   rochester <- read_syn_csv(ROCHESTER_USERS)
+  date_cols <- c("assessdate_fall", "assessdate_fall_m12", "bl_partburdenblvisitdt",
+                 "determinefall_visitdt", "compliance_dttm", "concldttm", "wddt",
+                 "irbapprovedt", "subjsigdt", "start_dt", "inexdttm", "demo_dttm",
+                 "dob", "screenorientdttm", "phoneorientdttm", "onsetdt", "mdsupdrs_dttm",
+                 "moca_dttm", "mseadl", "cgi_dttm", "determinefall_visitdt",
+                 "bl_partburdenblvisitdt", "compliance_dttm", "visstatdttm",
+                 "invsigdttm", "stop_dt", "notifdt", "eventdt", "reslvdt",
+                 "partburdenv1visitdt")
+  col_order <- names(rochester)
   rochester_perturbed <- perturb_dates(
     df = rochester,
     users = users,
     source_name = "ROCHESTER",
-    guid = "guid")
-  return(rochester_perturbed)
+    guid = "guid",
+    date_cols = date_cols)
+  return(rochester_perturbed[col_order])
 }
 
 perturb_bridge_dates <- function(users, table_mapping = NULL) {
-  bridge <- list(
-    "syn17015960" = read_syn_table("syn17015960"),
-    "syn17015065" = read_syn_table("syn17015065"),
-    "syn17014786" = read_syn_table("syn17014786"),
-    "syn17014785" = read_syn_table("syn17014785"),
-    "syn17014784" = read_syn_table("syn17014784"),
-    "syn17014782" = read_syn_table("syn17014782"),
-    "syn17014783" = read_syn_table("syn17014783"),
-    "syn17014781" = read_syn_table("syn17014781"),
-    "syn17014780" = read_syn_table("syn17014780"),
-    "syn17014779" = read_syn_table("syn17014779"),
-    "syn17014778" = read_syn_table("syn17014778"),
-    "syn17014777" = read_syn_table("syn17014777"),
-    "syn17014776" = read_syn_table("syn17014776"),
-    "syn17014775" = read_syn_table("syn17014775"))
+  bridge_tables <- c("syn17015960","syn17015065","syn17014786",
+                     "syn17014785","syn17014784","syn17014782",
+                     "syn17014783","syn17014781","syn17014780",
+                     "syn17014779","syn17014778","syn17014777",
+                     "syn17014776","syn17014775")
+  expected_tables <- c(bridge_tables, unlist(BRIDGE_MAPPING, use.names=F),
+                       "syn18693245", "syn16784393", "syn16786935", "syn18637903")
+  actual_tables <- synGetChildren(BRIDGE_PARENT, includeTypes=list("table"))$asList() %>% 
+    purrr::map(~ .$id) %>% 
+    unlist()
+  unexpected_tables <- setdiff(actual_tables, expected_tables)
+  if (length(unexpected_tables)) {
+    stop(paste("Unexpected table(s) found in the AT-HOME PD project:",
+               stringr::str_c(unexpected_tables, collapse=", "))) 
+  }
+  bridge <- purrr::map(bridge_tables, read_syn_table)
+  names(bridge) <- bridge_tables
   if (!is.null(table_mapping)) {
     deidentified_bridge <- purrr::map(table_mapping, read_syn_table)
     bridge_diff <- purrr::map(names(bridge), function(source_id) {
@@ -110,6 +144,7 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
   names(bridge_diff) <- names(bridge)
   }
   bridge_perturbed <- purrr::map(bridge_diff, function(df) {
+    col_order <- names(df)
     df <- df %>%
       mutate(uploadDate = lubridate::as_date(uploadDate),
              createdOn = lubridate::as_datetime(createdOn))
@@ -121,16 +156,17 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       df <- df %>% 
         mutate(metadata.endDate = lubridate::as_datetime(metadata.endDate))
     }
-    perturb_dates(
+    bridge_perturbed <- perturb_dates(
       df = df,
       users = users,
       source_name = "BRIDGE",
       guid = "externalId")
+    return(bridge_perturbed[col_order])
     })
   return(bridge_perturbed)
 }
 
-perturb_dates <- function(df, users, source_name, guid) {
+perturb_dates <- function(df, users, source_name, guid, date_cols=NULL) {
   if (nrow(df) == 0) {
     return(df)
   }
@@ -141,13 +177,24 @@ perturb_dates <- function(df, users, source_name, guid) {
   df_with_offsets <- as_tibble(
     merge(df, df_with_offsets, by.x=guid, by.y="guid", all.x = T))
   df_offsets <- lubridate::days(df_with_offsets$day_offset)
-  df_dates_perturbed <- df_with_offsets %>% 
-    select_if(lubridate::is.timepoint) %>% 
-    purrr::map_dfc(function(col) {
-      col + df_offsets
-    })
-  df_perturbed <- df_with_offsets %>% 
-    select_if(~ !lubridate::is.timepoint(.)) %>% 
+  if (is.null(date_cols)) {
+    df_dates_perturbed <- df_with_offsets %>% 
+      select_if(lubridate::is.timepoint)
+    df_perturbed <- df_with_offsets %>% 
+      select_if(~ !lubridate::is.timepoint(.))
+  } else {
+    df_dates_perturbed <- df_with_offsets %>% 
+      select_if(names(.) %in% date_cols)
+    df_perturbed <- df_with_offsets %>% 
+      select_if(!(names(.) %in% date_cols))
+  }
+  df_dates_perturbed <- purrr::map_dfc(df_dates_perturbed, function(col) {
+    if (typeof(col) == "logical") { # empty col
+      return(col)
+    }
+    return(col + df_offsets)
+  })
+  df_perturbed <- df_perturbed %>%
     bind_cols(df_dates_perturbed) %>% 
     select(-day_offset)
   return(df_perturbed)
