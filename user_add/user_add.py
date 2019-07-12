@@ -8,8 +8,8 @@ import os
 import re
 from botocore.exceptions import ClientError
 
-INPUT_TABLE = "syn16784393" # at-home-pd
-OUTPUT_TABLE = "syn16786935" # at-home-pd
+INPUT_TABLE = "syn18691016" # udall-superusers
+OUTPUT_TABLE = "syn18691020" # udall-superusers
 
 def read_args():
     # for testing
@@ -21,6 +21,8 @@ def read_args():
     parser.add_argument("--bridgePassword")
     parser.add_argument("--synapseUsername")
     parser.add_argument("--synapsePassword")
+    parser.add_argument("--substudy")
+    parser.add_argument("--support-email")
     args = parser.parse_args()
     return args
 
@@ -33,6 +35,8 @@ def get_env_var_credentials():
     credentials['synapsePassword'] = os.getenv('synapsePassword')
     credentials['bridgeUsername'] = os.getenv('bridgeUsername')
     credentials['bridgePassword'] = os.getenv('bridgePassword')
+    credentials['substudy'] = os.getenv('substudy')
+    credentials['support-email'] = os.getenv('support-email')
     return credentials
 
 
@@ -84,7 +88,8 @@ def get_participant_info(bridge, phone_number):
     return participant_info
 
 
-def process_request(bridge, participant_info, phone_number, external_id):
+def process_request(bridge, participant_info, phone_number, external_id,
+                    substudy, support_email):
     if participant_info['total'] == 0:
         # create account
         try:
@@ -97,7 +102,7 @@ def process_request(bridge, participant_info, phone_number, external_id):
             bridge.restPOST(
                     "/v4/externalids",
                     {"identifier": external_id,
-                     "substudyId": "at-home-pd"})
+                     "substudyId": substudy})
             bridge.restPOST(
                     "/v3/participants",
                     {"externalId": external_id,
@@ -118,7 +123,7 @@ def process_request(bridge, participant_info, phone_number, external_id):
             bridge.restPOST(
                     "/v4/externalids",
                     {"identifier": external_id,
-                     "substudyId": "at-home-pd"})
+                     "substudyId": substudy})
             bridge.restPOST(
                     "/v3/participants/{}".format(user_id),
                     {"externalId": external_id,
@@ -133,7 +138,7 @@ def process_request(bridge, participant_info, phone_number, external_id):
     elif participant_info['items'][0]['externalId'] != external_id:
         # phone and external ID have already been assigned
         return ("Error: Preexisting account found with guid {}. "
-                "Please contact AtHomePD_support@synapse.org "
+                "Please contact {} ".format(support_email)
                 "if you would like to assign a new guid.".format(
                     participant_info['items'][0]['externalId']))
     elif participant_info['items'][0]['externalId'] == external_id:
@@ -229,7 +234,7 @@ def main():
                                          "entered an incorrect guid and tried to "
                                          "submit a corrected one immediately "
                                          "afterwards. Please contact "
-                                         "AtHomePD_support@synapse.org "
+                                         "{} ".format(credentials["support_email"])
                                          "if you would like to assign a new guid.",
                                          duplicates.phone_number.iloc[0],
                                          "", duplicates.visit_date.iloc[0])
@@ -252,7 +257,9 @@ def main():
             elif not is_valid_guid(guid):
                 table_row = create_table_row("Error: The guid is improperly "
                                              "formatted. Please enter a valid guid "
-                                             "in XXXX-XXX-XXX format using only "
+                                             "in XXXX-XXX-XXX format "
+                                             "optionally prefixed by NIH- and "
+                                             "using only "
                                              "alphanumeric characters and hyphens.",
                                              phone_number, guid, visit_date)
             else:
@@ -260,7 +267,8 @@ def main():
                                            credentials['bridgePassword'])
                 participant_info = get_participant_info(bridge, phone_number)
                 status = process_request(bridge, participant_info,
-                                         phone_number, guid)
+                                         phone_number, guid, credentials["substudy"],
+                                         credentials["support_email"])
                 table_row = create_table_row(status, phone_number,
                                              guid, visit_date)
         except Exception as e:
