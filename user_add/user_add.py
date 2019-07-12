@@ -22,7 +22,7 @@ def read_args():
     parser.add_argument("--synapseUsername")
     parser.add_argument("--synapsePassword")
     parser.add_argument("--substudy")
-    parser.add_argument("--support-email")
+    parser.add_argument("--supportEmail")
     args = parser.parse_args()
     return args
 
@@ -36,7 +36,7 @@ def get_env_var_credentials():
     credentials['bridgeUsername'] = os.getenv('bridgeUsername')
     credentials['bridgePassword'] = os.getenv('bridgePassword')
     credentials['substudy'] = os.getenv('substudy')
-    credentials['support-email'] = os.getenv('support-email')
+    credentials['support-email'] = os.getenv('supportEmail')
     return credentials
 
 
@@ -234,7 +234,7 @@ def main():
                                          "entered an incorrect guid and tried to "
                                          "submit a corrected one immediately "
                                          "afterwards. Please contact "
-                                         "{} ".format(credentials["support_email"])
+                                         "{} ".format(credentials["supportEmail"])
                                          "if you would like to assign a new guid.",
                                          duplicates.phone_number.iloc[0],
                                          "", duplicates.visit_date.iloc[0])
@@ -268,7 +268,7 @@ def main():
                 participant_info = get_participant_info(bridge, phone_number)
                 status = process_request(bridge, participant_info,
                                          phone_number, guid, credentials["substudy"],
-                                         credentials["support_email"])
+                                         credentials["supportEmail"])
                 table_row = create_table_row(status, phone_number,
                                              guid, visit_date)
         except Exception as e:
