@@ -138,9 +138,9 @@ def process_request(bridge, participant_info, phone_number, external_id,
     elif participant_info['items'][0]['externalId'] != external_id:
         # phone and external ID have already been assigned
         return ("Error: Preexisting account found with guid {}. "
-                "Please contact {} ".format(support_email)
+                "Please contact {} "
                 "if you would like to assign a new guid.".format(
-                    participant_info['items'][0]['externalId']))
+                    participant_info['items'][0]['externalId'], support_email))
     elif participant_info['items'][0]['externalId'] == external_id:
         # account exists and is correct, do nothing
         return ("Success: Preexisting account found with matching phone number "
@@ -233,9 +233,9 @@ def main():
             table_row = create_table_row("Error: It looks like you accidentally "
                                          "entered an incorrect guid and tried to "
                                          "submit a corrected one immediately "
-                                         "afterwards. Please contact "
-                                         "{} ".format(credentials["supportEmail"])
-                                         "if you would like to assign a new guid.",
+                                         "afterwards. Please contact {} "
+                                         "if you would like to assign a new "
+                                         "guid.".format(credentials["supportEmail"]),
                                          duplicates.phone_number.iloc[0],
                                          "", duplicates.visit_date.iloc[0])
             syn.store(sc.Table(OUTPUT_TABLE, [table_row]))
