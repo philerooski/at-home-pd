@@ -36,7 +36,7 @@ def get_env_var_credentials():
     credentials['bridgeUsername'] = os.getenv('bridgeUsername')
     credentials['bridgePassword'] = os.getenv('bridgePassword')
     credentials['substudy'] = os.getenv('substudy')
-    credentials['support-email'] = os.getenv('supportEmail')
+    credentials['supportEmail'] = os.getenv('supportEmail')
     return credentials
 
 
