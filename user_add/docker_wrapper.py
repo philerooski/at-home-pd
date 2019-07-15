@@ -25,7 +25,7 @@ def main():
     if d['status'] == "READ_WRITE":
         os.system("docker run --rm -e synapseUsername={} -e synapsePassword={} "
                   "-e bridgeUsername={} -e bridgePassword={} -e inputTable={} "
-                  "-e outputTable={} -e substudy={} -e support-email={} "
+                  "-e outputTable={} -e substudy={} -e supportEmail={} "
                   "philsnyder/at-home-pd:latest "
                   "python /root/at-home-pd/user_add/user_add.py".format(
                       args.synapseUsername, args.synapsePassword,
