@@ -8,7 +8,7 @@ import os
 import re
 from botocore.exceptions import ClientError
 
-TESTING = True
+TESTING = False
 
 def read_args():
     # for testing
