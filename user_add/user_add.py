@@ -8,15 +8,14 @@ import os
 import re
 from botocore.exceptions import ClientError
 
-INPUT_TABLE = "syn18691016" # udall-superusers
-OUTPUT_TABLE = "syn18691020" # udall-superusers
+TESTING = False
 
 def read_args():
     # for testing
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--inputTable", default = INPUT_TABLE)
-    parser.add_argument("--outputTable", default = OUTPUT_TABLE)
+    parser.add_argument("--inputTable")
+    parser.add_argument("--outputTable")
     parser.add_argument("--bridgeUsername")
     parser.add_argument("--bridgePassword")
     parser.add_argument("--synapseUsername")
@@ -45,7 +44,7 @@ def delete_na_rows(syn, input_table):
             "select * from {} where phone_number is null or guid is null".format(input_table))
     syn.delete(rows_to_delete)
 
-def get_new_users(syn, input_table = INPUT_TABLE, output_table = OUTPUT_TABLE):
+def get_new_users(syn, input_table, output_table):
     input_table_df = syn.tableQuery(
             "select * from {}".format(input_table)).asDataFrame()
     for i, user in input_table_df.iterrows():
@@ -148,7 +147,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
 
 
 def create_table_row(status, phone_number, guid,
-                     visit_date, output_table = OUTPUT_TABLE):
+                     visit_date, output_table):
     table_values = [str(phone_number), str(guid), int(visit_date), status]
     return table_values
 
@@ -216,15 +215,27 @@ def get_credentials():
 
 
 def main():
-    credentials = get_env_var_credentials()
+    credentials = read_args() if TESTING else get_env_var_credentials()
+    if TESTING:
+        credentials_ = {}
+        credentials_["synapseUsername"] = credentials.synapseUsername
+        credentials_["synapsePassword"] = credentials.synapsePassword
+        credentials_["bridgeUsername"] = credentials.bridgeUsername
+        credentials_["bridgePassword"] = credentials.bridgePassword
+        credentials_["inputTable"] = credentials.inputTable
+        credentials_["outputTable"] = credentials.outputTable
+        credentials_["substudy"] = credentials.substudy
+        credentials_["supportEmail"] = credentials.supportEmail
+        credentials = credentials_
     syn = sc.login(email = credentials['synapseUsername'],
                    password = credentials['synapsePassword'])
     new_users = get_new_users(syn, input_table = credentials["inputTable"],
                               output_table = credentials["outputTable"])
     if isinstance(new_users, tuple): # returned error message
         table_row = create_table_row(new_users[0], new_users[1],
-                                     new_users[2], new_users[3])
-        syn.store(sc.Table(OUTPUT_TABLE, [table_row]))
+                                     new_users[2], new_users[3],
+                                     credentials["outputTable"])
+        syn.store(sc.Table(credentials["outputTable"], [table_row]))
         return
     duplicated_numbers = new_users.phone_number.duplicated(keep = False)
     if any(duplicated_numbers):
@@ -237,8 +248,9 @@ def main():
                                          "if you would like to assign a new "
                                          "guid.".format(credentials["supportEmail"]),
                                          duplicates.phone_number.iloc[0],
-                                         "", duplicates.visit_date.iloc[0])
-            syn.store(sc.Table(OUTPUT_TABLE, [table_row]))
+                                         "", duplicates.visit_date.iloc[0],
+                                         credentials["outputTable"])
+            syn.store(sc.Table(credentials["outputTable"], [table_row]))
             return
     to_append_to_table = []
     for i, user in new_users.iterrows():
@@ -253,7 +265,8 @@ def main():
                 table_row = create_table_row("Error: The phone number is improperly "
                                              "formatted. Please enter a valid, 10-digit "
                                              "number",
-                                             phone_number, guid, visit_date)
+                                             phone_number, guid, visit_date,
+                                             credentials["outputTable"])
             elif not is_valid_guid(guid):
                 table_row = create_table_row("Error: The guid is improperly "
                                              "formatted. Please enter a valid guid "
@@ -261,7 +274,8 @@ def main():
                                              "optionally prefixed by NIH- and "
                                              "using only "
                                              "alphanumeric characters and hyphens.",
-                                             phone_number, guid, visit_date)
+                                             phone_number, guid, visit_date,
+                                             credentials["outputTable"])
             else:
                 bridge = get_bridge_client(credentials['bridgeUsername'],
                                            credentials['bridgePassword'])
@@ -270,14 +284,14 @@ def main():
                                          phone_number, guid, credentials["substudy"],
                                          credentials["supportEmail"])
                 table_row = create_table_row(status, phone_number,
-                                             guid, visit_date)
+                                             guid, visit_date, credentials["outputTable"])
         except Exception as e:
             table_row = create_table_row("Error: One of the fields is improperly "
                                          "formatted. Console output: {0}".format(e),
-                                         -1, guid, visit_date)
+                                         -1, guid, visit_date, credentials["outputTable"])
         to_append_to_table.append(table_row)
     if len(to_append_to_table):
-        syn.store(sc.Table(OUTPUT_TABLE, to_append_to_table))
+        syn.store(sc.Table(credentials["outputTable"], to_append_to_table))
 
 
 if __name__ == "__main__":
