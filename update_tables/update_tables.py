@@ -79,7 +79,7 @@ def sanitize_table(syn, target, records):
     cols = syn.getTableColumns(target)
     for c in cols:
         if c['columnType'] == 'STRING':
-            if ('timezone' in c['name'] and
+            if ('timezone' in c['name'].lower() and
                 type(records[c['name']].iloc[0]) is np.float64):
                 records[c['name']] = list(map(parse_float_to_int, records[c['name']]))
         if ((c['columnType'] == 'INTEGER' or c['columnType'] == "DATE") and
