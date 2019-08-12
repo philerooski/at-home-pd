@@ -26,7 +26,7 @@ def main():
         os.system("docker run --rm -e synapseUsername={} -e synapsePassword={} "
                   "-e bridgeUsername={} -e bridgePassword={} -e inputTable={} "
                   "-e outputTable={} -e substudy={} -e supportEmail={} "
-                  "philsnyder/at-home-pd:latest "
+                  "philsnyder/at-home-pd:superusers "
                   "python /root/at-home-pd/user_add/user_add.py".format(
                       args.synapseUsername, args.synapsePassword,
                       args.bridgeUsername, args.bridgePassword,
