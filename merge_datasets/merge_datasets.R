@@ -90,7 +90,8 @@ summarize_bridge <- function() {
   datasets <- purrr::map(BRIDGE_MAPPING, read_syn_table)   
   original_tables <- read_syn_table(BRIDGE_SUMMARY) %>% 
     select(recordId, activity = originalTable) %>% 
-    filter(activity != "sms-messages-sent-from-bridge-v1")
+    filter(activity != "sms-messages-sent-from-bridge-v1",
+           activity != "StudyBurstReminder-v1")
   summarized_dataset <- purrr::map2_dfr(names(datasets), datasets, function(source_id, df) {
     table_info <- synGet(source_id)
     table_name <- table_info$properties$name
@@ -117,7 +118,7 @@ update_store_merged_datasets <- function(summarized_all) {
 }
 
 main <- function() {
-  synLogin()
+  synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   summarized_mjff <- summarize_mjff()
   summarized_rochester <- summarize_rochester()
   summarized_bridge <- summarize_bridge()
@@ -126,4 +127,4 @@ main <- function() {
   update_store_merged_datasets(summarized_all)
 }
 
-#main()
+main()
