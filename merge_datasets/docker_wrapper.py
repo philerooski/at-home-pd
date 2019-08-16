@@ -16,7 +16,7 @@ def main():
     args = read_args()
     os.system("docker run --rm -e synapseUsername={} -e synapsePassword={} "
               "philsnyder/at-home-pd:tidyverse "
-              "python /root/at-home-pd/random_start_date/random_start_date.R".format(
+              "python /root/at-home-pd/merge_datasets/merge_datasets.R".format(
                   args.synapseUsername, args.synapsePassword))
 
 
