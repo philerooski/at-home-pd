@@ -109,6 +109,22 @@ summarize_bridge <- function() {
   return(summarized_dataset)
 }
 
+mutate_participant_week_day <- function(summarized_all) {
+  first_activity <- summarized_all %>%
+    group_by(guid) %>%
+    summarise(first_activity_time = min(createdOn, na.rm=T))
+  summarized_all <- inner_join(summarized_all, first_activity)
+  summarized_all <- summarized_all %>%
+    mutate(
+      seconds_since_first_activity = ifelse(is.na(createdOn), NA, createdOn - first_activity_time),
+      dayInStudy = ifelse(is.na(createdOn), NA, as.integer(
+        floor(as.numeric(
+          lubridate::as.duration(seconds_since_first_activity), "days")))) + 1
+    ) %>%
+    select(-first_activity_time, -seconds_since_first_activity)
+  return(summarized_all)
+}
+
 update_store_merged_datasets <- function(summarized_all) {
   preexisting_summary <- synTableQuery(
     paste("select * from", TABLE_OUTPUT))$asDataFrame()
@@ -123,6 +139,7 @@ main <- function() {
   summarized_rochester <- summarize_rochester()
   summarized_bridge <- summarize_bridge()
   summarized_all <- bind_rows(summarized_mjff, summarized_rochester, summarized_bridge) %>%
+    mutate_participant_week_day() %>% 
     select(recordId, guid, source, activity, dplyr::everything())
   update_store_merged_datasets(summarized_all)
 }
