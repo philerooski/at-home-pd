@@ -4,6 +4,7 @@ library(tidyverse)
 ROCHESTER <- "syn18637150"
 ROCHESTER_DATA_DICTIONARY <- "syn17051559"
 MJFF_PARENT <- "syn18637133"
+BRIDGE_SUMMARY <- "syn18681888"
 BRIDGE_MAPPING <- list(
     "syn17015960" = "syn18681888",
     "syn17015065" = "syn18681890",
@@ -17,7 +18,9 @@ BRIDGE_MAPPING <- list(
     "syn17014778" = "syn18681902",
     "syn17014777" = "syn18681903",
     "syn17014776" = "syn18681904",
-    "syn17014775" = "syn18681905")
+    "syn17014775" = "syn18681905",
+    "syn17014782" = "syn18683083")
+TABLE_OUTPUT <- "syn18693245"
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {
   f <- synGet(syn_id)
@@ -39,9 +42,19 @@ summarize_rochester <- function() {
   data_dictionary <- read_syn_csv(ROCHESTER_DATA_DICTIONARY)
   forms <- unique(data_dictionary[["Form Name"]])
   summarized_dataset <- merge(visit_dates, forms, all=TRUE) %>% 
-    rename(activity = y) %>% 
-    mutate(activity = as.character(activity)) %>% 
+    rename(activity = y, createdOn = visstatdttm) %>% 
+    mutate(activity = as.character(activity),
+           createdOn = lubridate::as_datetime(createdOn),
+           source = "ROCHESTER") %>% 
     as_tibble()
+  summarized_dataset <- summarized_dataset %>% 
+    mutate(hash_key = if_else(is.na(createdOn),
+                              str_c(guid, "NA"),
+                              str_c(guid, createdOn)),
+           recordId = unlist(purrr::map(
+             hash_key, ~ digest::digest(., algo = "md5")))) %>% 
+    select(-hash_key)
+  return(summarized_dataset)
 }
 
 summarize_mjff <- function() {
@@ -55,20 +68,30 @@ summarize_mjff <- function() {
     }
     if (activity != "users") {
       summarized_dataset <- df %>% 
-        select(guid, study_visit_start_date) %>% 
-        mutate(activity = activity)
+        select(guid, createdOn = study_visit_start_date) %>% 
+        mutate(createdOn = lubridate::as_datetime(createdOn),
+               activity = activity,
+               source = "MJFF")
     } else {
       summarized_dataset <- df %>% 
         select(guid) %>% 
-        mutate(study_visit_start_date = NA) %>% 
-        mutate(activity = activity)
+        mutate(createdOn = NA, activity = activity, source = "MJFF")
     }
   })
+  summarized_dataset <- summarized_dataset %>% 
+    mutate(hash_key = str_c(guid, createdOn),
+           recordId = unlist(purrr::map(
+             hash_key, ~ digest::digest(., algo = "md5")))) %>% 
+    select(-hash_key)
+  return(summarized_dataset)
 }
 
 summarize_bridge <- function() {
   datasets <- purrr::map(BRIDGE_MAPPING, read_syn_table)   
-  summarized_dataset <- purrr::map2_dfr(names(BRIDGE_MAPPING), datasets, function(source_id, df) {
+  original_tables <- read_syn_table(BRIDGE_SUMMARY) %>% 
+    select(recordId, activity = originalTable) %>% 
+    filter(activity != "sms-messages-sent-from-bridge-v1")
+  summarized_dataset <- purrr::map2_dfr(names(datasets), datasets, function(source_id, df) {
     table_info <- synGet(source_id)
     table_name <- table_info$properties$name
     # We have 2 PassiveDisplacement-v\\d tables
@@ -76,9 +99,21 @@ summarize_bridge <- function() {
     #  str_sub(table_name, nchar(table_name)-2, nchar(table_name)) <- ""
     #}
     summarized_dataset <- df %>% 
-      select(guid = externalId, createdOn) %>% 
-      mutate(createdOn = lubridate::as_datetime(createdOn/1000))
+      select(guid = externalId, recordId, createdOn, appVersion,
+             phoneInfo, dataGroups) %>% 
+      mutate(createdOn = lubridate::as_datetime(createdOn),
+             source = "MPOWER")
   })
+  summarized_dataset <- left_join(summarized_dataset, original_tables, by = "recordId")
+  return(summarized_dataset)
+}
+
+update_store_merged_datasets <- function(summarized_all) {
+  preexisting_summary <- synTableQuery(
+    paste("select * from", TABLE_OUTPUT))$asDataFrame()
+  new_records <- summarized_all %>% 
+    anti_join(preexisting_summary, by = "recordId")
+  synStore(synapser::Table(TABLE_OUTPUT, new_records))
 }
 
 main <- function() {
@@ -86,6 +121,9 @@ main <- function() {
   summarized_mjff <- summarize_mjff()
   summarized_rochester <- summarize_rochester()
   summarized_bridge <- summarize_bridge()
+  summarized_all <- bind_rows(summarized_mjff, summarized_rochester, summarized_bridge) %>%
+    select(recordId, guid, source, activity, dplyr::everything())
+  update_store_merged_datasets(summarized_all)
 }
 
 #main()

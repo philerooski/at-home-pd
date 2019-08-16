@@ -205,6 +205,7 @@ store_rochester_perturbed <- function(rochester_dataset) {
   write_csv(rochester_dataset, fname)
   f <- synapser::File(fname, parent = ROCHESTER_PARENT)
   synStore(f, used = list(ROCHESTER_USERS))
+  unlink(fname)
 }
 
 store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
@@ -214,6 +215,7 @@ store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
     write_csv(.y, fname)
     f <- synapser::File(fname, parent = MJFF_PARENT)
     synStore(f, used = list(.x))
+    unlink(fname)
   })
 }
 
@@ -252,7 +254,8 @@ update_user_list <- function(users) {
 }
 
 main <- function() {
-  synLogin()
+  # set env variables synapseUsername and synapsePassword before running
+  synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   users <- curate_user_list() %>% 
     update_user_list()
   rochester_dataset <- perturb_rochester_dates(users)
@@ -264,3 +267,4 @@ main <- function() {
 }
 
 main()
+
