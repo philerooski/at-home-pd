@@ -105,7 +105,7 @@ summarize_bridge <- function() {
       mutate(createdOn = lubridate::as_datetime(createdOn),
              source = "MPOWER")
   })
-  summarized_dataset <- left_join(summarized_dataset, original_tables, by = "recordId")
+  summarized_dataset <- inner_join(summarized_dataset, original_tables, by = "recordId")
   return(summarized_dataset)
 }
 
