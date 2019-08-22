@@ -111,16 +111,20 @@ summarize_bridge <- function() {
 
 mutate_participant_week_day <- function(summarized_all) {
   first_activity <- summarized_all %>%
+    filter(source == "MPOWER") %>% 
     group_by(guid) %>%
     summarise(first_activity_time = min(createdOn, na.rm=T))
   summarized_all <- inner_join(summarized_all, first_activity)
-  summarized_all <- summarized_all %>%
+  summarized_all_mpower <- summarized_all %>%
+    filter(source == "MPOWER") %>% 
     mutate(
       seconds_since_first_activity = ifelse(is.na(createdOn), NA, createdOn - first_activity_time),
       dayInStudy = ifelse(is.na(createdOn), NA, as.integer(
         floor(as.numeric(
-          lubridate::as.duration(seconds_since_first_activity), "days")))) + 1
-    ) %>%
+          lubridate::as.duration(seconds_since_first_activity), "days")))) + 1)
+  summarized_all <- summarized_all %>% 
+    anti_join(summarized_all_mpower, by = "recordId") %>% 
+    bind_rows(summarized_all_mpower) %>% 
     select(-first_activity_time, -seconds_since_first_activity)
   return(summarized_all)
 }

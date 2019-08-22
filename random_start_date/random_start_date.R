@@ -48,7 +48,7 @@ curate_user_list <- function() {
     mutate(source = "ROCHESTER")
   bridge_users <- read_syn_table(BRIDGE_USERS) %>% 
     distinct(guid) %>% 
-    mutate(source = "BRIDGE")
+    mutate(source = "MPOWER")
   users <- bind_rows(mjff_users, rochester_users, bridge_users)
   users <- users %>% 
     group_by(guid) %>% 
@@ -159,8 +159,10 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
     bridge_perturbed <- perturb_dates(
       df = df,
       users = users,
-      source_name = "BRIDGE",
-      guid = "externalId")
+      source_name = "MPOWER",
+      guid = "externalId",
+      date_cols = c("uploadDate", "createdOn", "metadata.startDate",
+                    "metadata.endDate", "displacement.timestampDate"))
     return(bridge_perturbed[col_order])
     })
   return(bridge_perturbed)
@@ -174,8 +176,16 @@ perturb_dates <- function(df, users, source_name, guid, date_cols=NULL) {
   df_with_offsets <- users %>% 
     filter(source == source_name) %>% 
     select(guid, day_offset)
-  df_with_offsets <- as_tibble(
-    merge(df, df_with_offsets, by.x=guid, by.y="guid", all.x = T))
+  guid_flag <- TRUE
+  if (!has_name(df, "guid")) {
+    df$guid <- df[[guid]]
+    guid_flag <- FALSE
+  }
+  df_with_offsets <- df %>% 
+    left_join(df_with_offsets, by = "guid")
+  if (!guid_flag) {
+    df <- select(df, -guid)
+  }
   df_offsets <- lubridate::days(df_with_offsets$day_offset)
   if (is.null(date_cols)) {
     df_dates_perturbed <- df_with_offsets %>% 
