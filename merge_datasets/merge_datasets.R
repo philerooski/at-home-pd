@@ -87,26 +87,13 @@ summarize_mjff <- function() {
 }
 
 summarize_bridge <- function() {
-  datasets <- purrr::map(BRIDGE_MAPPING, read_syn_table)   
   original_tables <- read_syn_table(BRIDGE_SUMMARY) %>% 
-    select(recordId, activity = originalTable) %>% 
+    select(recordId, guid = externalId, createdOn, appVersion,
+           phoneInfo, dataGroups, activity = originalTable) %>% 
     filter(activity != "sms-messages-sent-from-bridge-v1",
-           activity != "StudyBurstReminder-v1")
-  summarized_dataset <- purrr::map2_dfr(names(datasets), datasets, function(source_id, df) {
-    table_info <- synGet(source_id)
-    table_name <- table_info$properties$name
-    # We have 2 PassiveDisplacement-v\\d tables
-    #if (str_ends(table_name, "-v\\d")) {
-    #  str_sub(table_name, nchar(table_name)-2, nchar(table_name)) <- ""
-    #}
-    summarized_dataset <- df %>% 
-      select(guid = externalId, recordId, createdOn, appVersion,
-             phoneInfo, dataGroups) %>% 
-      mutate(createdOn = lubridate::as_datetime(createdOn),
-             source = "MPOWER")
-  })
-  summarized_dataset <- inner_join(summarized_dataset, original_tables, by = "recordId")
-  return(summarized_dataset)
+           activity != "StudyBurstReminder-v1") %>% 
+    mutate(source = "MPOWER")
+  return(original_tables)
 }
 
 mutate_participant_week_day <- function(summarized_all) {
