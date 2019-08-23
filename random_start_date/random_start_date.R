@@ -163,6 +163,8 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       guid = "externalId",
       date_cols = c("uploadDate", "createdOn", "metadata.startDate",
                     "metadata.endDate", "displacement.timestampDate"))
+    bridge_perturbed <- bridge_perturbed %>% 
+      distinct(recordId, .keep_all = TRUE)
     return(bridge_perturbed[col_order])
     })
   return(bridge_perturbed)
@@ -277,4 +279,3 @@ main <- function() {
 }
 
 main()
-
