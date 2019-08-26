@@ -92,7 +92,8 @@ summarize_bridge <- function() {
            phoneInfo, dataGroups, activity = originalTable) %>% 
     filter(activity != "sms-messages-sent-from-bridge-v1",
            activity != "StudyBurstReminder-v1") %>% 
-    mutate(source = "MPOWER")
+    mutate(source = "MPOWER",
+           createdOn = lubridate::with_tz(createdOn, "America/Los_Angeles"))
   return(original_tables)
 }
 
@@ -101,18 +102,16 @@ mutate_participant_week_day <- function(summarized_all) {
     filter(source == "MPOWER") %>% 
     group_by(guid) %>%
     summarise(first_activity_time = min(createdOn, na.rm=T))
-  summarized_all <- inner_join(summarized_all, first_activity)
-  summarized_all_mpower <- summarized_all %>%
-    filter(source == "MPOWER") %>% 
-    mutate(
-      seconds_since_first_activity = ifelse(is.na(createdOn), NA, createdOn - first_activity_time),
-      dayInStudy = ifelse(is.na(createdOn), NA, as.integer(
-        floor(as.numeric(
-          lubridate::as.duration(seconds_since_first_activity), "days")))) + 1)
+  summarized_all <- full_join(summarized_all, first_activity)
+  summarized_all_mpower <- summarized_all %>% 
+    filter(source == "MPOWER") %>%
+    mutate(createdOnDate = lubridate::as_date(createdOn),
+           dayInStudy = as.integer(
+             createdOnDate - lubridate::as_date(first_activity_time)))
   summarized_all <- summarized_all %>% 
     anti_join(summarized_all_mpower, by = "recordId") %>% 
     bind_rows(summarized_all_mpower) %>% 
-    select(-first_activity_time, -seconds_since_first_activity)
+    select(-first_activity_time, -createdOnDate)
   return(summarized_all)
 }
 
