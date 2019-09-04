@@ -57,7 +57,7 @@ store_to_synapse <- function(at_risk_users) {
 }
 
 main <- function() {
-  synLogin()
+  synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   mpower <- fetch_mpower()
   at_risk_users <- identify_at_risk_users(mpower)
   store_to_synapse(at_risk_users)
