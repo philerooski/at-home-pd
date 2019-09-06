@@ -19,7 +19,8 @@ BRIDGE_MAPPING <- list(
     "syn17014777" = "syn18681903",
     "syn17014776" = "syn18681904",
     "syn17014775" = "syn18681905",
-    "syn17014782" = "syn18683083")
+    "syn17014782" = "syn18683083",
+    "syn20712373" = "syn20715163")
 TABLE_OUTPUT <- "syn18693245"
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {

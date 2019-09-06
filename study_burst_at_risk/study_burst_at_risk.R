@@ -44,7 +44,8 @@ identify_at_risk_users <- function(mpower) {
     summarize(daysCompletedInStudyBurst = sum(activityCompletedWithinStudyBurst),
               daysRemainingInStudyBurst = median(daysRemainingInStudyBurst),
               currentStudyBurst = median(currentStudyBurstNumber)) %>% 
-    filter((daysCompletedInStudyBurst == 0 | 
+    filter((daysCompletedInStudyBurst == 0 &
+              (daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 19)  | 
             daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 15))
   return(at_risk_users) 
 }
