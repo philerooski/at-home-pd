@@ -115,13 +115,9 @@ perturb_rochester_dates <- function(users) {
 }
 
 perturb_bridge_dates <- function(users, table_mapping = NULL) {
-  bridge_tables <- c("syn17015960","syn17015065","syn17014786",
-                     "syn17014785","syn17014784","syn17014782",
-                     "syn17014783","syn17014781","syn17014780",
-                     "syn17014779","syn17014778","syn17014777",
-                     "syn17014776","syn17014775")
-  expected_tables <- c(bridge_tables, unlist(BRIDGE_MAPPING, use.names=F),
-                       "syn18693245", "syn16784393", "syn16786935", "syn18637903")
+  expected_tables <- c(names(BRIDGE_MAPPING), unlist(BRIDGE_MAPPING, use.names=F),
+                       "syn18693245", "syn16784393", "syn16786935", "syn18637903",
+                       "syn20709661")
   actual_tables <- synGetChildren(BRIDGE_PARENT, includeTypes=list("table"))$asList() %>% 
     purrr::map(~ .$id) %>% 
     unlist()
@@ -130,8 +126,8 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
     stop(paste("Unexpected table(s) found in the AT-HOME PD project:",
                stringr::str_c(unexpected_tables, collapse=", "))) 
   }
-  bridge <- purrr::map(bridge_tables, read_syn_table)
-  names(bridge) <- bridge_tables
+  bridge <- purrr::map(names(BRIDGE_MAPPING), read_syn_table)
+  names(bridge) <- names(BRIDGE_MAPPING)
   if (!is.null(table_mapping)) {
     deidentified_bridge <- purrr::map(table_mapping, read_syn_table)
     bridge_diff <- purrr::map(names(bridge), function(source_id) {
