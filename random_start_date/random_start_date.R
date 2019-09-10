@@ -58,6 +58,29 @@ curate_user_list <- function() {
   return(users)
 }
 
+update_user_list <- function(users) {
+  existing_users <- read_syn_table(DEIDENTIFIED_DATA_OFFSET) %>%
+    mutate(guid = as.character(guid),
+           source = as.character(source))
+  brand_new_users <- anti_join(users, existing_users, by = "guid")
+  new_sources <- anti_join(users, existing_users, by = c("guid", "source")) %>% 
+    anti_join(brand_new_users, by = "guid") %>% 
+    select(-day_offset)
+  new_sources <- new_sources %>% 
+    bind_rows(existing_users) %>% 
+    group_by(guid) %>% 
+    mutate(day_offset = replace_na(day_offset, median(day_offset, na.rm = T))) %>% 
+    semi_join(new_sources, by = c("guid", "source"))
+  new_users <- bind_rows(brand_new_users, new_sources)
+  if (nrow(new_users) > 0) {
+    updated_table <- synStore(Table(DEIDENTIFIED_DATA_OFFSET, new_users))
+    all_users <- read_syn_table(updated_table$tableId)
+  } else {
+    all_users <- existing_users
+  }
+  return(all_users)
+}
+
 perturb_mjff_dates <- function(users) {
   mjff <- synGetChildren("syn18678038")$asList()
   names(mjff) <- purrr::map(mjff, ~ .$id)
@@ -139,6 +162,8 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       return(new_records)
     })
   names(bridge_diff) <- names(bridge)
+  } else {
+    bridge_diff <- bridge
   }
   bridge_perturbed <- purrr::map(bridge_diff, function(df) {
     col_order <- names(df)
@@ -247,19 +272,6 @@ store_bridge_perturbed <- function(bridge_dataset, table_mapping=NULL) {
       synStore(Table(schema, .y), used = list(.x))
     })
   }
-}
-
-update_user_list <- function(users) {
-  existing_users <- read_syn_table(DEIDENTIFIED_DATA_OFFSET) %>%
-    mutate(guid = as.character(guid))
-  new_users <- anti_join(users, existing_users, by = "guid")
-  if (nrow(new_users) > 0) {
-    updated_table <- synStore(Table(DEIDENTIFIED_DATA_OFFSET, new_users))
-    all_users <- read_syn_table(updated_table$tableId)
-  } else {
-    all_users <- existing_users
-  }
-  return(all_users)
 }
 
 main <- function() {

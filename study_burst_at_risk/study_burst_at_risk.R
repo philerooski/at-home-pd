@@ -44,9 +44,23 @@ identify_at_risk_users <- function(mpower) {
     summarize(daysCompletedInStudyBurst = sum(activityCompletedWithinStudyBurst),
               daysRemainingInStudyBurst = median(daysRemainingInStudyBurst),
               currentStudyBurst = median(currentStudyBurstNumber)) %>% 
-    filter((daysCompletedInStudyBurst == 0 &
-              (daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 19)  | 
-            daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 15))
+    filter((daysCompletedInStudyBurst == 0 & daysRemainingInStudyBurst <= 18) | 
+            daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 15)
+  at_risk_past_activity <- mpower %>% 
+    ungroup() %>% 
+    semi_join(at_risk_users, by = "guid") %>% 
+    mutate(previousStudyBurstStart = studyBurstStart - 90,
+           previousStudyBurstEnd = studyBurstEnd - 90) %>% 
+    filter(previousStudyBurstStart >= 0,
+           dayInStudy >= previousStudyBurstStart,
+           dayInStudy <= previousStudyBurstEnd) %>% 
+    group_by(guid) %>% 
+    summarize(daysCompletedPreviousStudyBurst = n())
+  at_risk_users <- at_risk_users %>% 
+    left_join(at_risk_past_activity, by = "guid") %>% 
+    mutate(daysCompletedPreviousStudyBurst = {ifelse(
+      is.na(daysCompletedPreviousStudyBurst) & currentStudyBurst > 1,
+      0, daysCompletedPreviousStudyBurst)})
   return(at_risk_users) 
 }
 
