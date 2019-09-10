@@ -37,16 +37,37 @@ identify_at_risk_users <- function(mpower) {
            studyBurstStart = currentStudyBurstNumber * 90,
            studyBurstEnd = studyBurstStart + 20,
            daysRemainingInStudyBurst = studyBurstEnd - currentDayInStudy)
+  current_study_burst_users <- mpower %>% 
+    filter(currentlyInStudyBurst) %>%
+    summarize(daysRemainingInStudyBurst = median(daysRemainingInStudyBurst),
+              currentStudyBurst = median(currentStudyBurstNumber))
   at_risk_users <- mpower %>% 
-    filter(currentlyInStudyBurst) %>% 
-    mutate(activityCompletedWithinStudyBurst = (dayInStudy > studyBurstStart &
-                                                dayInStudy < studyBurstEnd)) %>% 
-    summarize(daysCompletedInStudyBurst = sum(activityCompletedWithinStudyBurst),
-              daysRemainingInStudyBurst = median(daysRemainingInStudyBurst),
-              currentStudyBurst = median(currentStudyBurstNumber)) %>% 
-    filter((daysCompletedInStudyBurst == 0 &
-              (daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 19)  | 
-            daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 15))
+    filter(currentlyInStudyBurst,
+           dayInStudy > studyBurstStart & dayInStudy < studyBurstEnd) %>% 
+    summarize(daysCompletedInStudyBurst = n_distinct(dayInStudy)) %>% 
+    full_join(current_study_burst_users, by = "guid") %>% 
+    mutate(daysCompletedInStudyBurst = {ifelse(
+      is.na(daysCompletedInStudyBurst), 0, daysCompletedInStudyBurst)}) %>% 
+    filter((daysCompletedInStudyBurst == 0 & daysRemainingInStudyBurst <= 18) | 
+            daysRemainingInStudyBurst + daysCompletedInStudyBurst <= 15,
+           daysCompletedInStudyBurst < 10,
+           daysCompletedInStudyBurst + daysRemainingInStudyBurst >= 5)
+  at_risk_past_activity <- mpower %>% 
+    ungroup() %>% 
+    semi_join(at_risk_users, by = "guid") %>% 
+    mutate(previousStudyBurstStart = studyBurstStart - 90,
+           previousStudyBurstEnd = studyBurstEnd - 90) %>% 
+    filter(previousStudyBurstStart >= 0,
+           dayInStudy >= previousStudyBurstStart,
+           dayInStudy <= previousStudyBurstEnd) %>% 
+    group_by(guid) %>% 
+    summarize(daysCompletedPreviousStudyBurst = n_distinct(dayInStudy))
+  at_risk_users <- at_risk_users %>% 
+    left_join(at_risk_past_activity, by = "guid") %>% 
+    mutate(daysCompletedPreviousStudyBurst = {ifelse(
+      is.na(daysCompletedPreviousStudyBurst) & currentStudyBurst > 0, # bursts are 0-indexed
+      0, daysCompletedPreviousStudyBurst)}) %>% 
+    mutate(currentStudyBurst = currentStudyBurst + 1) # bursts are now 1-indexed
   return(at_risk_users) 
 }
 
