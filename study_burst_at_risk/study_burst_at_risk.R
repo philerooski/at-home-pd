@@ -59,8 +59,9 @@ identify_at_risk_users <- function(mpower) {
   at_risk_users <- at_risk_users %>% 
     left_join(at_risk_past_activity, by = "guid") %>% 
     mutate(daysCompletedPreviousStudyBurst = {ifelse(
-      is.na(daysCompletedPreviousStudyBurst) & currentStudyBurst > 1,
-      0, daysCompletedPreviousStudyBurst)})
+      is.na(daysCompletedPreviousStudyBurst) & currentStudyBurst > 0, # bursts are 0-indexed so far
+      0, daysCompletedPreviousStudyBurst)}) %>% 
+    mutate(currentStudyBurst = currentStudyBurst + 1) # bursts are now 1-indexed
   return(at_risk_users) 
 }
 
