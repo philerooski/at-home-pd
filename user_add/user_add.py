@@ -108,7 +108,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
                      "phone": {"number": phone_number,
                                "regionCode": "US"},
                      "dataGroups": engagement_groups + ["clinical_consent"],
-                     "sharingScope": "sponsors_and_partners"}) # assume US?
+                     "sharingScope": "all_qualified_researchers"}) # assume US?
             return "Success: User account created"
         except Exception as e:
             return ("Error: Could not create user account. "
@@ -127,7 +127,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
                     "/v3/participants/{}".format(user_id),
                     {"externalId": external_id,
                      "dataGroups": ["clinical_consent"],
-                     "sharingScope": "sponsors_and_partners"}) # assume US?
+                     "sharingScope": "all_qualified_researchers"}) # assume US?
             return ("Success: Preexisting user account found. "
                     "New External ID assigned.")
         except Exception as e:
