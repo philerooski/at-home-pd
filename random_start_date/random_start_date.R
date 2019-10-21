@@ -140,7 +140,7 @@ perturb_rochester_dates <- function(users) {
 perturb_bridge_dates <- function(users, table_mapping = NULL) {
   expected_tables <- c(names(BRIDGE_MAPPING), unlist(BRIDGE_MAPPING, use.names=F),
                        "syn18693245", "syn16784393", "syn16786935", "syn18637903",
-                       "syn20709661")
+                       "syn20709661", "syn20930854")
   actual_tables <- synGetChildren(BRIDGE_PARENT, includeTypes=list("table"))$asList() %>% 
     purrr::map(~ .$id) %>% 
     unlist()
