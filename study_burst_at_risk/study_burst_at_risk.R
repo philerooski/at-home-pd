@@ -16,8 +16,7 @@ fetch_mpower <- function() {
   user_offset <- read_syn_table(USER_OFFSET) %>% 
     select(-ROW_ID, -ROW_VERSION)
   mpower <- read_syn_table(MPOWER_SUMMARY) %>% 
-    filter(source == "MPOWER",
-           stringr::str_starts(activity, "StudyBurst")) %>% 
+    filter(source == "MPOWER") %>% 
     left_join(user_offset, by = c("guid", "source")) %>% 
     mutate(createdOn = lubridate::with_tz(createdOn, "America/Los_Angeles"),
            createdOn = createdOn - lubridate::days(day_offset)) %>% 
@@ -36,7 +35,8 @@ identify_at_risk_users <- function(mpower) {
            currentStudyBurstNumber = {ifelse(currentlyInStudyBurst, currentDayInStudy %/% 90, NA)},
            studyBurstStart = currentStudyBurstNumber * 90,
            studyBurstEnd = studyBurstStart + 20,
-           daysRemainingInStudyBurst = studyBurstEnd - currentDayInStudy)
+           daysRemainingInStudyBurst = studyBurstEnd - currentDayInStudy) %>% 
+    filter(str_detect(activity, "StudyBurst"))
   current_study_burst_users <- mpower %>% 
     filter(currentlyInStudyBurst) %>%
     summarize(daysRemainingInStudyBurst = median(daysRemainingInStudyBurst),
