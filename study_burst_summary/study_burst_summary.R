@@ -68,8 +68,11 @@ build_study_burst_summary <- function(mpower) {
     rename(study_burst = study_burst_number) %>% 
     mutate(study_burst = as.character(study_burst),
            study_burst_start_date = as.character(study_burst_start_date),
-           study_burst_end_date = as.character(study_burst_end_date)) %>% 
-    arrange(guid, study_burst)
+           study_burst_end_date = as.character(study_burst_end_date),
+           guid_prefix = str_extract(guid, "^.{3}")) %>% 
+    arrange(guid, study_burst) %>% 
+    select(guid, guid_prefix, study_burst, study_burst_start_date,
+           study_burst_end_date, days_completed, study_burst_successful)
   study_burst_summary$study_burst <- dplyr::recode(
     study_burst_summary$study_burst, "0" = "Y1,Q1", "1" = "Y1,Q2", "2" = "Y1,Q3",
     "3" = "Y1,Q4", "4" = "Y2,Q1", "5" = "Y2,Q2", "6" = "Y2,Q3",
