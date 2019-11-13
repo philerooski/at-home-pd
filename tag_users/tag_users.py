@@ -76,7 +76,10 @@ def push_to_synapse(syn, all_participants):
     result = all_participants[["healthCode", "userType", "atHomePD"]]
     fname = "mpower2_healthcode_categorizations.csv"
     result.to_csv(fname, index = False)
-    f = sc.File(fname, parent = OUTPUT_PARENT)
+    f = sc.File(fname, parent = OUTPUT_PARENT,
+                used=[AT_HOME_PD_USER_LIST, HEALTH_DATA_SUMMARY_TABLE],
+                executed="https://github.com/Sage-Bionetworks/at-home-pd/"
+                         "blob/master/tag_users/tag_users.py")
     syn.store(f)
 
 

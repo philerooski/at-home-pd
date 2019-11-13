@@ -23,7 +23,8 @@ BRIDGE_MAPPING <- list(
     "syn17014777" = "syn18681903",
     "syn17014776" = "syn18681904",
     "syn17014775" = "syn18681905",
-    "syn17014782" = "syn18683083")
+    "syn17014782" = "syn18683083",
+    "syn20712373" = "syn20715163")
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {
   f <- synGet(syn_id)
@@ -48,13 +49,36 @@ curate_user_list <- function() {
     mutate(source = "ROCHESTER")
   bridge_users <- read_syn_table(BRIDGE_USERS) %>% 
     distinct(guid) %>% 
-    mutate(source = "BRIDGE")
+    mutate(source = "MPOWER")
   users <- bind_rows(mjff_users, rochester_users, bridge_users)
   users <- users %>% 
     group_by(guid) %>% 
     mutate(day_offset = round(runif(1, -10, 10))) %>% 
     ungroup()
   return(users)
+}
+
+update_user_list <- function(users) {
+  existing_users <- read_syn_table(DEIDENTIFIED_DATA_OFFSET) %>%
+    mutate(guid = as.character(guid),
+           source = as.character(source))
+  brand_new_users <- anti_join(users, existing_users, by = "guid")
+  new_sources <- anti_join(users, existing_users, by = c("guid", "source")) %>% 
+    anti_join(brand_new_users, by = "guid") %>% 
+    select(-day_offset)
+  new_sources <- new_sources %>% 
+    bind_rows(existing_users) %>% 
+    group_by(guid) %>% 
+    mutate(day_offset = replace_na(day_offset, median(day_offset, na.rm = T))) %>% 
+    semi_join(new_sources, by = c("guid", "source"))
+  new_users <- bind_rows(brand_new_users, new_sources)
+  if (nrow(new_users) > 0) {
+    updated_table <- synStore(Table(DEIDENTIFIED_DATA_OFFSET, new_users))
+    all_users <- read_syn_table(updated_table$tableId)
+  } else {
+    all_users <- existing_users
+  }
+  return(all_users)
 }
 
 perturb_mjff_dates <- function(users) {
@@ -114,13 +138,9 @@ perturb_rochester_dates <- function(users) {
 }
 
 perturb_bridge_dates <- function(users, table_mapping = NULL) {
-  bridge_tables <- c("syn17015960","syn17015065","syn17014786",
-                     "syn17014785","syn17014784","syn17014782",
-                     "syn17014783","syn17014781","syn17014780",
-                     "syn17014779","syn17014778","syn17014777",
-                     "syn17014776","syn17014775")
-  expected_tables <- c(bridge_tables, unlist(BRIDGE_MAPPING, use.names=F),
-                       "syn18693245", "syn16784393", "syn16786935", "syn18637903")
+  expected_tables <- c(names(BRIDGE_MAPPING), unlist(BRIDGE_MAPPING, use.names=F),
+                       "syn18693245", "syn16784393", "syn16786935", "syn18637903",
+                       "syn20709661", "syn20930854")
   actual_tables <- synGetChildren(BRIDGE_PARENT, includeTypes=list("table"))$asList() %>% 
     purrr::map(~ .$id) %>% 
     unlist()
@@ -129,8 +149,8 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
     stop(paste("Unexpected table(s) found in the AT-HOME PD project:",
                stringr::str_c(unexpected_tables, collapse=", "))) 
   }
-  bridge <- purrr::map(bridge_tables, read_syn_table)
-  names(bridge) <- bridge_tables
+  bridge <- purrr::map(names(BRIDGE_MAPPING), read_syn_table)
+  names(bridge) <- names(BRIDGE_MAPPING)
   if (!is.null(table_mapping)) {
     deidentified_bridge <- purrr::map(table_mapping, read_syn_table)
     bridge_diff <- purrr::map(names(bridge), function(source_id) {
@@ -142,6 +162,8 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       return(new_records)
     })
   names(bridge_diff) <- names(bridge)
+  } else {
+    bridge_diff <- bridge
   }
   bridge_perturbed <- purrr::map(bridge_diff, function(df) {
     col_order <- names(df)
@@ -159,8 +181,12 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
     bridge_perturbed <- perturb_dates(
       df = df,
       users = users,
-      source_name = "BRIDGE",
-      guid = "externalId")
+      source_name = "MPOWER",
+      guid = "externalId",
+      date_cols = c("uploadDate", "createdOn", "metadata.startDate",
+                    "metadata.endDate", "displacement.timestampDate"))
+    bridge_perturbed <- bridge_perturbed %>% 
+      distinct(recordId, .keep_all = TRUE)
     return(bridge_perturbed[col_order])
     })
   return(bridge_perturbed)
@@ -174,8 +200,16 @@ perturb_dates <- function(df, users, source_name, guid, date_cols=NULL) {
   df_with_offsets <- users %>% 
     filter(source == source_name) %>% 
     select(guid, day_offset)
-  df_with_offsets <- as_tibble(
-    merge(df, df_with_offsets, by.x=guid, by.y="guid", all.x = T))
+  guid_flag <- TRUE
+  if (!has_name(df, "guid")) {
+    df$guid <- df[[guid]]
+    guid_flag <- FALSE
+  }
+  df_with_offsets <- df %>% 
+    left_join(df_with_offsets, by = "guid")
+  if (!guid_flag) {
+    df <- select(df, -guid)
+  }
   df_offsets <- lubridate::days(df_with_offsets$day_offset)
   if (is.null(date_cols)) {
     df_dates_perturbed <- df_with_offsets %>% 
@@ -205,6 +239,7 @@ store_rochester_perturbed <- function(rochester_dataset) {
   write_csv(rochester_dataset, fname)
   f <- synapser::File(fname, parent = ROCHESTER_PARENT)
   synStore(f, used = list(ROCHESTER_USERS))
+  unlink(fname)
 }
 
 store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
@@ -214,6 +249,7 @@ store_mjff_perturbed <- function(mjff_dataset, table_mapping=NULL) {
     write_csv(.y, fname)
     f <- synapser::File(fname, parent = MJFF_PARENT)
     synStore(f, used = list(.x))
+    unlink(fname)
   })
 }
 
@@ -238,21 +274,9 @@ store_bridge_perturbed <- function(bridge_dataset, table_mapping=NULL) {
   }
 }
 
-update_user_list <- function(users) {
-  existing_users <- read_syn_table(DEIDENTIFIED_DATA_OFFSET) %>%
-    mutate(guid = as.character(guid))
-  new_users <- anti_join(users, existing_users, by = "guid")
-  if (nrow(new_users) > 0) {
-    updated_table <- synStore(Table(DEIDENTIFIED_DATA_OFFSET, new_users))
-    all_users <- read_syn_table(updated_table$tableId)
-  } else {
-    all_users <- existing_users
-  }
-  return(all_users)
-}
-
 main <- function() {
-  synLogin()
+  # set env variables synapseUsername and synapsePassword before running
+  synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   users <- curate_user_list() %>% 
     update_user_list()
   rochester_dataset <- perturb_rochester_dates(users)
