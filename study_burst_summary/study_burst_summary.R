@@ -1,9 +1,8 @@
 library(synapser)
 library(tidyverse)
 
-MPOWER_SUMMARY <- "syn18693245"
-USER_OFFSET <- "syn18637903"
-TABLE_OUTPUT <- "syn20930854"
+SUPERUSERS_SUMMARY <- "syn20710121"
+#TABLE_OUTPUT <- "syn20930854"
 
 read_syn_table <- function(syn_id) {
   q <- synTableQuery(paste("select * from", syn_id))
@@ -89,7 +88,8 @@ store_to_synapse <- function(study_burst_summary) {
 
 main <- function() {
   synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
-  mpower <- fetch_mpower()
+  mpower <- read_syn_table(SUPERUSERS_OFFSET) %>%
+	  rename(guid = externalId, activity = originalTable)
   study_burst_summary <- build_study_burst_summary(mpower)
   store_to_synapse(study_burst_summary)
 }
