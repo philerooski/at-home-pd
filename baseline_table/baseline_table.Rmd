@@ -1,0 +1,76 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r include=FALSE}
+library(synapser)
+library(tidyverse)
+synLogin(silent=TRUE)
+
+DEMOGRAPHICS_TABLE = "syn17014782"
+TABLE_CONTAINING_ALL_PARTICIPANTS <- "syn16786935"
+```
+
+```{r}
+# throws error if there are partially completed surveys
+drop_rows_containing_na <- function(demographics) {
+  demographics_partial_completion <- demographics %>% 
+    mutate(missing_birthYear = is.na(birthYear),
+           missing_sex = is.na(sex),
+           missing_diagnosis = is.na(diagnosis)) %>%
+    filter(missing_birthYear || missing_sex || missing_diagnosis,
+           !(missing_birthYear && missing_sex && missing_diagnosis))
+  if (nrow(demographics_partial_completion)) {
+    missing_individuals <- demographics_partial_completion %>% 
+      distinct(externalId)
+    stop(paste("These individuals have partially completed demographic surveys:",
+               str_c(missing_individuals$externalId, collapse = ", ")))
+  } else {
+    demographics_sans_na <- demographics %>% 
+      drop_na(birthYear, sex, diagnosis)
+    return(demographics_sans_na)
+  }
+}
+```
+
+
+```{r}
+# download and clean demographics
+demographics <- synTableQuery(paste("select * from", DEMOGRAPHICS_TABLE))$asDataFrame()
+demographics <- demographics %>% 
+  as_tibble() %>% 
+  select(externalId, createdOn, createdOnTimeZone, dataGroups,
+         birthYear, sex, diagnosis) %>% 
+  drop_rows_containing_na() %>% 
+  distinct(externalId, .keep_all = TRUE) %>% 
+  arrange(createdOn)
+```
+
+```{r}
+# all participants (as reference for those who did not complete survey)
+all_participants <- synTableQuery(paste(
+  "select guid from", TABLE_CONTAINING_ALL_PARTICIPANTS,
+  "where status like 'Success%'"))$asDataFrame()
+all_participants <- all_participants %>% 
+  as_tibble() %>% 
+  distinct(guid, .keep_all = TRUE) %>% 
+  select(externalId = guid)
+```
+
+```{r}
+ demographics <- demographics %>% 
+  full_join(all_participants)
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
