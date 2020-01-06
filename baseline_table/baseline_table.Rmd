@@ -1,22 +1,24 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Demographics"
+output:
+  html_document:
+    df_print: paged
+    theme: cerulean
 ---
-
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
 
 ```{r include=FALSE}
 library(synapser)
 library(tidyverse)
+library(kableExtra)
 synLogin(silent=TRUE)
 
-DEMOGRAPHICS_TABLE = "syn17014782"
+DEMOGRAPHICS_TABLE <- "syn17014782"
 TABLE_CONTAINING_ALL_PARTICIPANTS <- "syn16786935"
+BACKGROUND_TABLE <- "syn17008627"
+CLINICAL_TABLE <- "syn17051543"
 ```
 
-```{r}
+```{r,include=FALSE}
 # throws error if there are partially completed surveys
 drop_rows_containing_na <- function(demographics) {
   demographics_partial_completion <- demographics %>% 
@@ -39,7 +41,7 @@ drop_rows_containing_na <- function(demographics) {
 ```
 
 
-```{r}
+```{r, include=FALSE}
 # download and clean demographics
 demographics <- synTableQuery(paste("select * from", DEMOGRAPHICS_TABLE))$asDataFrame()
 demographics <- demographics %>% 
@@ -51,7 +53,7 @@ demographics <- demographics %>%
   arrange(createdOn)
 ```
 
-```{r}
+```{r, include=FALSE}
 # all participants (as reference for those who did not complete survey)
 all_participants <- synTableQuery(paste(
   "select guid from", TABLE_CONTAINING_ALL_PARTICIPANTS,
@@ -62,15 +64,265 @@ all_participants <- all_participants %>%
   select(externalId = guid)
 ```
 
-```{r}
+```{r, include=FALSE}
  demographics <- demographics %>% 
   full_join(all_participants)
 ```
 
+```{r, include=FALSE}
+background <- synTableQuery(paste("select * from", BACKGROUND_TABLE))$asDataFrame()
+background <- all_participants %>% 
+  left_join(background) %>% 
+  select(externalId, ethnicity, starts_with("race"),
+         education, starts_with("employmentStatus"), smartphoneUse) %>% 
+  distinct(externalId, .keep_all = T)
+```
+```{r, include=FALSE}
+baseline_source <- full_join(demographics, background, by = "externalId") %>%
+  mutate(age = as.integer(lubridate::year(createdOn) - birthYear))
+```
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+```{r, include=FALSE}
+format_num_percent <- function(num, total, max_digit_length = 3) {
+  digit_length = nchar(as.character(num))
+  padding <- str_dup(" ", max_digit_length - digit_length)
+  formatted_str <- paste0(num, padding, " | ", scales::percent(num/total))
+  return(formatted_str)
+}
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+build_baseline_table <- function(baseline_source) {
+  basic_table <- baseline_source %>%
+    summarize(Age = paste0(round(mean(age, na.rm=T), 1), "±",
+                    round(sqrt(var(age, na.rm=T)), 1)),
+              num_males = sum(sex == "male", na.rm=T),
+              num_females = sum(sex == "female", na.rm=T),
+              `Gender (male/female)` = paste0(
+                num_males, "/", num_females, " ",
+                "(", scales::percent(
+                  num_males / (num_males + num_females)), " male)")) %>% 
+    select(-num_males, -num_females) %>% 
+    pivot_longer(everything())
+  # TODO look at race as recorded in clinical forms
+  ethnicity <- baseline_source %>% 
+    
+  ethnicity <- baseline_source %>% 
+    summarize(num_hispanic = sum(ethnicity == "Hispanic or Latino", na.rm=T),
+              Respondents = sum(!is.na(ethnicity)),
+              `Hispanic or Latino` = format_num_percent(
+                num_hispanic, Respondents)) %>% 
+    mutate(Respondents = as.character(Respondents)) %>% 
+    select(Respondents, `Hispanic or Latino`) %>% 
+    pivot_longer(cols = everything())
+  race <- baseline_source %>%
+    summarize(num_aian = sum(`race.American Indian or Alaska Native`, na.rm=T),
+              num_asian = sum(race.Asian, na.rm=T),
+              num_black = sum(`race.Black or African American`, na.rm=T),
+              num_nhopi = sum(`race.Native Hawaiian or Other Pacific Islander`, na.rm=T),
+              num_white = sum(race.White, na.rm=T),
+              num_prefer_no_answer = sum(`race.Prefer not to answer`, na.rm=T),
+              Respondents = c(num_aian + num_asian + num_black +
+                               num_nhopi + num_white + num_prefer_no_answer),
+              `American Indian or Alaska Native` = format_num_percent(
+                num_aian, Respondents),
+              Asian = format_num_percent(num_asian, Respondents),
+              `Black or African American` = format_num_percent(num_black, Respondents),
+              `Native Hawaiian or Other Pacific Islander` = format_num_percent(
+                num_nhopi, Respondents),
+              White = format_num_percent(num_white, Respondents),
+              `Prefer not to Answer` = format_num_percent(
+                num_prefer_no_answer, Respondents)
+              ) %>% 
+    mutate(Respondents = as.character(Respondents)) %>% 
+    select(Respondents, `American Indian or Alaska Native`,
+           Asian, `Black or African American`, `Native Hawaiian or Other Pacific Islander`,
+           White, `Prefer not to Answer`) %>% 
+    pivot_longer(cols = everything())
+  educations <- baseline_source %>% 
+    count(education) %>% 
+    filter(!is.na(education)) %>% 
+    mutate(Respondents = sum(n),
+           n = format_num_percent(n, Respondents))
+  educations <- tibble(education = "Respondents",
+                       n = as.character(median(educations$Respondents))) %>% 
+    bind_rows(educations) %>% 
+    select(-Respondents)
+  employment_status <- baseline_source %>% 
+    select(dplyr::starts_with("employmentStatus")) %>% 
+    pivot_longer(everything()) %>% 
+    group_by(name) %>% 
+    summarize(n = sum(value, na.rm = T)) %>% 
+    mutate(name = str_replace(name, "employmentStatus\\.", ""),
+           name = str_replace(name, "A ", ""),
+           name = stringr::str_to_sentence(name),
+           Respondents = sum(n),
+           n = format_num_percent(n, Respondents))
+  employment_status <- tibble(name = "Respondents",
+                              n = as.character(median(employment_status$Respondents))) %>% 
+    bind_rows(employment_status) %>% 
+    select(-Respondents)
+  smartphone_order <- c("Very Easy", "Easy", "Neither easy nor difficult", "Difficult")
+  smartphone_use <- baseline_source %>%
+    count(smartphoneUse) %>% 
+    filter(!is.na(smartphoneUse)) %>% 
+    mutate(Respondents = sum(n),
+           n = format_num_percent(n, Respondents))
+}
+```
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+```{r include=FALSE}
+# Baseline Table using Rochester clinical data
+build_clinical_baseline_table <- function() {
+  f <- synGet(CLINICAL_TABLE)
+  clinical <- read_csv(f$path)
+  day_consented <- clinical %>% 
+    filter(!is.na(demo_dttm)) %>% 
+    arrange(demo_dttm) %>%
+    distinct(guid, .keep_all = TRUE) %>% 
+    mutate(demo_dttm = lubridate::as_date(demo_dttm)) %>% 
+    select(guid, demo_dttm)
+  age <- clinical %>%
+    filter(!is.na(dob)) %>%
+    select(guid, dob) %>% 
+    inner_join(day_consented, by = "guid") %>% 
+    mutate(age = as.integer(lubridate::time_length(demo_dttm - dob, "years"))) %>% 
+    select(guid, age)
+  sex <- clinical %>% 
+    filter(!is.na(gendertyppdbp)) %>% 
+    arrange(desc(demo_dttm)) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    select(guid, gendertyppdbp)
+  basics <- age %>% 
+    inner_join(sex) %>% 
+    summarise(Age = paste(round(mean(age), 1), "±",
+                           round(sqrt(var(age)), 1)),
+              num_males = sum(gendertyppdbp == "Male"),
+              num_females = sum(gendertyppdbp == "Female"),
+              `Sex (male/female)` = paste(num_males, "/", num_females)) %>% 
+    select(Age, `Sex (male/female)`) %>% 
+    pivot_longer(everything())
+  ethnicity <- clinical %>% 
+    filter(!is.na(ethnicity)) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    count(ethnicity) %>% 
+    mutate(Respondents = sum(n),
+           n = format_num_percent(n, median(Respondents))) %>% 
+    select(-Respondents)
+  race <- clinical %>% 
+    select(guid, starts_with("raceexpndcatpdbp")) %>% 
+    pivot_longer(starts_with("raceexpndcatpdbp")) %>% 
+    filter(value == "Checked")
+  race_multiple <- race %>% 
+    count(guid) %>% 
+    filter(n > 1) %>% 
+    mutate(name = "Other", value = "Checked") %>% 
+    select(guid, name, value)
+  race <- race %>% 
+    anti_join(race_multiple, by = "guid") %>% 
+    count(name) %>% 
+    mutate(name = str_replace_all(
+      name,
+      pattern = c("raceexpndcatpdbp___1$" = "American Indian or Alaska Native",
+                  "raceexpndcatpdbp___2" = "African - South",
+                  "raceexpndcatpdbp___3" = "African - North",
+                  "raceexpndcatpdbp___4" = "American - Black",
+                  "raceexpndcatpdbp___5" = "Asian - East",
+                  "raceexpndcatpdbp___6" = "Asian - West",
+                  "raceexpndcatpdbp___7" = "Caucasian",
+                  "raceexpndcatpdbp___8" = "Native Hawaiian or other Pacific Islander",
+                  "raceexpndcatpdbp___9" = "Unknown or not reported",
+                  "raceexpndcatpdbp___10" = "Other"))) %>% 
+    bind_rows(tibble(name = "Multiple Races", n = nrow(race_multiple))) %>% 
+    mutate(Respondents = sum(n)) %>% 
+    arrange(desc(n)) %>% 
+    mutate(n = format_num_percent(n, median(Respondents))) %>% 
+    select(-Respondents)
+  educations <- clinical %>% 
+    filter(!is.na(education)) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    count(education) %>% 
+    mutate(Respondents = sum(n),
+           n = format_num_percent(n, median(Respondents))) %>% 
+    select(-Respondents)
+  ordered_education <- tibble(
+    education = c("High school diploma (GED or equivalent)",
+                  "Some college (1-4 years, no degree)",
+                  "Associate's degree",
+                  "Bachelor's degree",
+                  "Master's degree",
+                  "Doctorate degree (PhD, EdD, etc)",
+                  "Professional school degree (MD, DDC, JD, etc)"))
+  educations <- left_join(ordered_education, educations)
+  employments <- clinical %>% 
+    filter(!is.na(employment)) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    count(employment) %>% 
+    mutate(Respondents = sum(n)) %>% 
+    arrange(desc(n)) %>% 
+    mutate(n = format_num_percent(n, median(Respondents))) %>% 
+    select(-Respondents)
+  incomes <- clinical %>% 
+    filter(!is.na(income)) %>% 
+    distinct(guid, .keep_all = T) %>%
+    count(income) %>% 
+    mutate(Respondents = sum(n)) %>% 
+    mutate(n = format_num_percent(n, median(Respondents))) %>% 
+    select(-Respondents)
+  ordered_incomes <- tibble(
+    income = c("Less than $20,000",
+               "$20,000 to $34,999",
+               "$35,000 to $49,999",
+               "$50,000 to $74,999",
+               "$75,000 to $99,000",
+               "More than $100,000",
+               "Prefer not to answer"))
+  incomes <- left_join(ordered_incomes, incomes)
+  # potential other tables: marital, living_situation
+  return(list(
+    basic = basics,
+    ethnicity = ethnicity,
+    race = race,
+    education = educations,
+    employment = employments,
+    income = incomes))
+}
+
+clinical_baseline_table <- build_clinical_baseline_table()
+```
+
+```{r include=FALSE}
+# Basics
+names(clinical_baseline_table$basic) <- c("name", "value")
+#kable(clinical_baseline_table$basic, "pandoc")
+# Ethnicity
+names(clinical_baseline_table$ethnicity) <- c("name", "value")
+#kable(clinical_baseline_table$ethnicity, "pandoc")
+# Race
+names(clinical_baseline_table$race) <- c("name", "value")
+#kable(clinical_baseline_table$race, "pandoc")
+# Education
+names(clinical_baseline_table$education) <- c("name", "value")
+#kable(clinical_baseline_table$education, "pandoc")
+# Employment
+names(clinical_baseline_table$employment) <- c("name", "value")
+#kable(clinical_baseline_table$employment, "pandoc")
+# Income
+names(clinical_baseline_table$income) <- c("name", "value")
+#kable(clinical_baseline_table$income, "pandoc")
+baseline_table <- bind_rows(clinical_baseline_table)
+```
+
+
+```{r, echo=FALSE}
+# Row numbers may need adjusting based on baseline table contents
+names(baseline_table) <- NULL
+kable(baseline_table) %>% 
+  kable_styling("condensed", full_width = T) %>% 
+  pack_rows("Age and Sex", 1, 2) %>% 
+  pack_rows("Ethnicity", 3, 4) %>% 
+  pack_rows("Race", 5, 11) %>% 
+  pack_rows("Education", 12, 18) %>% 
+  pack_rows("Employment", 19, 25) %>% 
+  pack_rows("Income", 26, 32)
+```
 
