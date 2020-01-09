@@ -1,3 +1,17 @@
+#' This script produces a table with columns:
+#' 
+#' * guid (str)
+#' * guid_prefix (str)
+#' * study_burst (str)
+#' * study_burst_start_date (str)
+#' * study_burst_end_date (str)
+#' * days_completed (int)
+#' * study_burst_successful (bool)
+#' 
+#' And stores this result to TABLE_OUTPUT (global var below).
+#' 
+#' This is more granular than the table produced by compliance_overview.R,
+#' which summarizes study burst compliance at the study burst level (Y1,Q1, etc.)
 library(synapser)
 library(tidyverse)
 
