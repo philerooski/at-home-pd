@@ -138,17 +138,6 @@ perturb_rochester_dates <- function(users) {
 }
 
 perturb_bridge_dates <- function(users, table_mapping = NULL) {
-  expected_tables <- c(names(BRIDGE_MAPPING), unlist(BRIDGE_MAPPING, use.names=F),
-                       "syn18693245", "syn16784393", "syn16786935", "syn18637903",
-                       "syn20709661", "syn20930854")
-  actual_tables <- synGetChildren(BRIDGE_PARENT, includeTypes=list("table"))$asList() %>% 
-    purrr::map(~ .$id) %>% 
-    unlist()
-  unexpected_tables <- setdiff(actual_tables, expected_tables)
-  if (length(unexpected_tables)) {
-    stop(paste("Unexpected table(s) found in the AT-HOME PD project:",
-               stringr::str_c(unexpected_tables, collapse=", "))) 
-  }
   bridge <- purrr::map(names(BRIDGE_MAPPING), read_syn_table)
   names(bridge) <- names(BRIDGE_MAPPING)
   if (!is.null(table_mapping)) {
