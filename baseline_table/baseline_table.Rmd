@@ -102,9 +102,6 @@ build_baseline_table <- function(baseline_source) {
                   num_males / (num_males + num_females)), " male)")) %>% 
     select(-num_males, -num_females) %>% 
     pivot_longer(everything())
-  # TODO look at race as recorded in clinical forms
-  #ethnicity <- baseline_source %>% 
-    
   ethnicity <- baseline_source %>% 
     summarize(num_hispanic = sum(ethnicity == "Hispanic or Latino", na.rm=T),
               Respondents = sum(!is.na(ethnicity)),
