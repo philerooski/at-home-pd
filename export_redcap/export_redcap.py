@@ -45,8 +45,10 @@ def main():
                    credentials['synapsePassword'])
     proj = redcap.Project(url = credentials['redcapURL'],
                           token = credentials['redcapToken'])
-    exported_records_label = proj.export_records(raw_or_label = "label", format = "df")
-    exported_records_raw = proj.export_records(raw_or_label = "raw", format = "df")
+    exported_records_label = proj.export_records(raw_or_label = "label",
+            format = "df", export_survey_fields = True)
+    exported_records_raw = proj.export_records(raw_or_label = "raw",
+            format = "df", export_survey_fields = True)
     exported_records_label = filter_identifiers(exported_records_label)
     exported_records_raw = filter_identifiers(exported_records_raw)
     store_to_synapse(syn, exported_records_label, "exported_records.csv")
