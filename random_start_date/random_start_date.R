@@ -125,9 +125,26 @@ perturb_rochester_dates <- function(users) {
                  "dob", "screenorientdttm", "phoneorientdttm", "onsetdt", "mdsupdrs_dttm",
                  "moca_dttm", "mseadl", "cgi_dttm", "determinefall_visitdt",
                  "bl_partburdenblvisitdt", "compliance_dttm", "visstatdttm",
-                 "invsigdttm", "stop_dt", "notifdt", "eventdt", "reslvdt",
-                 "partburdenv1visitdt")
+                 "stop_dt", "reslvdt",
+                 "partburdenv1visitdt", 'enrollment_confirmation_timestamp',
+                 'prebaseline_survey_timestamp', 'preference_and_burden_bl_timestamp',
+                 'preference_and_burden_visit_timestamp', 'previsit_survey_timestamp',
+                 'redcap_survey_identifier', 'reportable_event_timestamp',
+                 'study_burst_reminders_timestamp')
+  rochester <- rochester %>% 
+    mutate(preference_and_burden_bl_timestamp = replace(
+      preference_and_burden_bl_timestamp,
+      preference_and_burden_bl_timestamp == "[not completed]", NA)) %>% 
+    mutate(preference_and_burden_bl_timestamp = lubridate::as_datetime(preference_and_burden_bl_timestamp))
   col_order <- names(rochester)
+  if (any(purrr::map(rochester[date_cols], class) == "character")) {
+    error_message <- paste("There are some date columns in the rochester clinical",
+               "which were cast as character and may prevent them from",
+               "being deidentified")
+    synSendMessage(list("3342492"), "Error in deidentifying AHPD data",
+                   error_message, contentType = "text")
+    stop(error_message)
+  }
   rochester_perturbed <- perturb_dates(
     df = rochester,
     users = users,
