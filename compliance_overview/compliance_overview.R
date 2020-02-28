@@ -11,6 +11,7 @@ library(synapser)
 library(tidyverse)
 
 STUDY_BURST_SUMMARY <- "syn20930854"
+STUDY_BURST_SCHEDULE <- "syn20930854"
 TABLE_OUTPUT <- "syn21500168"
 
 read_syn_table <- function(syn_id) {
@@ -28,12 +29,19 @@ store_to_synapse <- function(compliance_overview) {
 }
 
 build_compliance_overview <- function(study_burst_summary) {
+  num_no_activity <- study_burst_schedule %>% 
+    filter(lubridate::as_date(study_burst_start_date) <= lubridate::today(),
+           days_completed == 0) %>% 
+    count(study_burst, name = "no_activity")
   compliance_overview <- study_burst_summary %>% 
     group_by(study_burst) %>% 
     summarize(complete = sum(study_burst_successful, na.rm = T),
               incomplete = sum(!study_burst_successful, na.rm = T),
               to_complete = sum(is.na(study_burst_successful)),
               percent_compliant =  round(complete / (complete + incomplete), 2)) %>% 
+    left_join(num_no_activity) %>% 
+    mutate(no_activity = replace_na(no_activity, 0)) %>% 
+    select(study_burst:to_complete, no_activity, percent_compliant) %>% 
     arrange(study_burst)
   return(compliance_overview)
 }
@@ -41,6 +49,7 @@ build_compliance_overview <- function(study_burst_summary) {
 main <- function() {
   synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   study_burst_summary <- read_syn_table(STUDY_BURST_SUMMARY)
+  study_burst_schedule <- read_syn_table(STUDY_BURST_SCHEDULE)
   compliance_overview <- build_compliance_overview(study_burst_summary)
   store_to_synapse(compliance_overview)
 }
