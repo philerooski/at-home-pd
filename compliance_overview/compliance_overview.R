@@ -40,8 +40,9 @@ build_compliance_overview <- function(study_burst_summary) {
               to_complete = sum(is.na(study_burst_successful)),
               percent_compliant =  round(complete / (complete + incomplete), 2)) %>% 
     left_join(num_no_activity) %>% 
-    mutate(no_activity = replace_na(no_activity, 0)) %>% 
-    select(study_burst:to_complete, no_activity, percent_compliant) %>% 
+    mutate(no_activity = replace_na(no_activity, 0),
+           incomplete = incomplete - no_activity) %>% 
+    select(study_burst, complete, incomplete, no_activity, to_complete, percent_compliant) %>% 
     arrange(study_burst)
   return(compliance_overview)
 }
