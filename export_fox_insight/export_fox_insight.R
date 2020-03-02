@@ -42,8 +42,8 @@ store_fox_surveys <- function(fox_surveys, write_path = ".") {
 main <- function() {
   fox_login(Sys.getenv("foxEmail"), Sys.getenv("foxPassword"))
   synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))  
-  fox_surveys <- get_fox_surveys()
-  store_fox_surveys(fox_surveys)
+  fox_surveys <- get_fox_surveys(download_path = "/root")
+  store_fox_surveys(fox_surveys, write_path = "/root")
 }
 
 main()
