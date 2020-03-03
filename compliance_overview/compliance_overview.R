@@ -28,7 +28,7 @@ store_to_synapse <- function(compliance_overview) {
   synStore(t)
 }
 
-build_compliance_overview <- function(study_burst_summary) {
+build_compliance_overview <- function(study_burst_summary, study_burst_schedule) {
   num_no_activity <- study_burst_schedule %>% 
     filter(lubridate::as_date(study_burst_start_date) <= lubridate::today(),
            days_completed == 0) %>% 
@@ -42,7 +42,8 @@ build_compliance_overview <- function(study_burst_summary) {
     left_join(num_no_activity) %>% 
     mutate(no_activity = replace_na(no_activity, 0),
            partially_complete = partially_complete - no_activity) %>% 
-    select(study_burst, complete, partially_complete, no_activity, to_complete, percent_compliant) %>% 
+    select(study_burst, complete, partially_complete, no_activity,
+           to_complete, percent_compliant) %>% 
     arrange(study_burst)
   return(compliance_overview)
 }
@@ -51,8 +52,9 @@ main <- function() {
   synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   study_burst_summary <- read_syn_table(STUDY_BURST_SUMMARY)
   study_burst_schedule <- read_syn_table(STUDY_BURST_SCHEDULE)
-  compliance_overview <- build_compliance_overview(study_burst_summary)
+  compliance_overview <- build_compliance_overview(study_burst_summary,
+                                                   study_burst_schedule)
   store_to_synapse(compliance_overview)
 }
 
-main()
+#main()
