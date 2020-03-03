@@ -8,7 +8,7 @@ ROCHESTER_PARENT <- "syn18637131"
 MJFF_PARENT <- "syn18637133"
 BRIDGE_PARENT <- "syn12617210"
 DEIDENTIFIED_DATA_OFFSET <- "syn18637903"
-MJFF_ORIGINALS_W_IDENTIFIER <- "syn18678038"
+FOX_INSIGHT_EXPORTED_SURVEYS <- "syn21670408"
 BRIDGE_MAPPING <- list(
     "syn17015960" = "syn18681888",
     "syn17015065" = "syn18681890",
@@ -82,12 +82,11 @@ update_user_list <- function(users) {
 }
 
 perturb_mjff_dates <- function(users) {
-  mjff <- synGetChildren("syn18678038")$asList()
+  mjff <- synGetChildren(FOX_INSIGHT_EXPORTED_SURVEYS)$asList()
   names(mjff) <- purrr::map(mjff, ~ .$id)
   mjff <- purrr::map(mjff, ~ read_syn_csv(.$id))
-  mjff$syn18680002 <- NULL # users.csv
-  date_cols <- c("study_visit_start_date", "first_answer_created_at",
-                 "last_answer_created_at", "last_answer_modified_at",
+  mjff$syn21670519 <- NULL # users.csv, we don't want to export this (?)
+  date_cols <- c("study_date", 
                  paste("1.1.0 When did you start taking prescription medication",
                         "to treat your Parkinson's disease?"),
                  paste("1.1 When were you first diagnosed with Parkinson's disease",
