@@ -57,4 +57,4 @@ main <- function() {
   store_to_synapse(compliance_overview)
 }
 
-#main()
+main()
