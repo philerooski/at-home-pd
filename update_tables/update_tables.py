@@ -3,7 +3,7 @@ import argparse
 import synapseclient as sc
 import synapsebridgehelpers
 
-TABLE_MAPPINGS = {
+TABLE_MAPPING = {
         "syn17013485": "syn20710066", # Engagement-v1
         "syn16995608": "syn20710068", # PassiveDisplacement-v4
         "syn15673384": "syn20710073", # Medication-v3
