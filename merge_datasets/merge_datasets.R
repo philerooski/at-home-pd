@@ -69,7 +69,7 @@ summarize_mjff <- function() {
     }
     if (activity != "users") {
       summarized_dataset <- df %>% 
-        select(guid, createdOn = study_visit_start_date) %>% 
+        select(guid, createdOn = study_date) %>% 
         mutate(createdOn = lubridate::as_datetime(createdOn),
                activity = activity,
                source = "MJFF")
