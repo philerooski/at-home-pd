@@ -15,8 +15,7 @@
 library(synapser)
 library(tidyverse)
 
-MPOWER_SUMMARY <- "syn18693245"
-USER_OFFSET <- "syn18637903"
+STUDY_BURST_TABLE <- "syn17014778"
 TABLE_OUTPUT <- "syn20930854"
 
 read_syn_table <- function(syn_id) {
@@ -26,22 +25,33 @@ read_syn_table <- function(syn_id) {
   return(table)
 }
 
+get_timezone_as_integer <- function(createdOnTimeZone) {
+  # If there is no timezone information we make the conservative
+  # (for a US user) estimate that the time zone is Pacific
+  if (is.na(createdOnTimeZone)) {
+    return(-8)
+  } else {
+    cotz_integer <- as.integer(as.integer(createdOnTimeZone) / 100)
+    return(cotz_integer)
+  }
+}
+
 fetch_mpower <- function() {
-  user_offset <- read_syn_table(USER_OFFSET) %>% 
-    select(-ROW_ID, -ROW_VERSION)
-  mpower <- read_syn_table(MPOWER_SUMMARY) %>% 
-    filter(source == "MPOWER") %>% 
-    left_join(user_offset, by = c("guid", "source")) %>% 
-    mutate(createdOn = lubridate::with_tz(createdOn, "America/Los_Angeles"),
-           createdOn = createdOn - lubridate::days(day_offset)) %>% 
-    select(-day_offset)
+  mpower <- read_syn_table(STUDY_BURST_TABLE)
+  mpower$createdOnTimeZoneInteger <- unlist(purrr::map(mpower$createdOnTimeZone,
+                                                       get_timezone_as_integer))
+  mpower <- mpower %>% 
+    mutate(createdOnLocalTime = createdOn + lubridate::hours(createdOnTimeZoneInteger)) %>% 
+    rename(guid = externalId)
   return(mpower)
 }
 
 build_study_burst_summary <- function(mpower) {
+  #' We make the conservative (for a US user) assumption that the current day is
+  #' relative to Pacific time.
   first_activity <- mpower %>% 
     group_by(activity_guid = guid) %>%
-    summarize(first_activity = lubridate::as_date(min(createdOn)),
+    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)),
               currentDayInStudy = as.integer(
                 lubridate::today(tz="America/Los_Angeles") - first_activity),
               currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
@@ -109,3 +119,4 @@ main <- function() {
 }
 
 main()
+
