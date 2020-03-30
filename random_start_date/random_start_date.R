@@ -132,8 +132,12 @@ perturb_rochester_dates <- function(users) {
   rochester <- rochester %>% 
     mutate(preference_and_burden_bl_timestamp = replace(
       preference_and_burden_bl_timestamp,
-      preference_and_burden_bl_timestamp == "[not completed]", NA)) %>% 
-    mutate(preference_and_burden_bl_timestamp = lubridate::as_datetime(preference_and_burden_bl_timestamp))
+      preference_and_burden_bl_timestamp == "[not completed]", NA),
+      preference_and_burden_visit_timestamp = replace(
+      preference_and_burden_visit_timestamp,
+      preference_and_burden_visit_timestamp == "[not completed]", NA)) %>% 
+    mutate(preference_and_burden_bl_timestamp = lubridate::as_datetime(preference_and_burden_bl_timestamp),
+           preference_and_burden_visit_timestamp = lubridate::as_datetime(preference_and_burden_visit_timestamp))
   col_order <- names(rochester)
   if (any(purrr::map(rochester[date_cols], class) == "character")) {
     error_message <- paste("There are some date columns in the rochester clinical",
