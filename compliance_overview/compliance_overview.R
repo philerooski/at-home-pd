@@ -24,7 +24,7 @@ read_syn_table <- function(syn_id) {
 store_to_synapse <- function(compliance_overview) {
   q <- synTableQuery(paste("select * from", TABLE_OUTPUT))
   synDelete(q) # Remove preexisting rows
-  t <- synTable(TABLE_OUTPUT, compliance_overview)  
+  t <- synapser::Table(TABLE_OUTPUT, compliance_overview)  
   synStore(t)
 }
 
