@@ -15,7 +15,7 @@
 library(synapser)
 library(tidyverse)
 
-STUDY_BURST_TABLE <- "syn17014778"
+HEALTH_DATA_SUMMARY_TABLE <- "syn17015960"
 TABLE_OUTPUT <- "syn20930854"
 
 read_syn_table <- function(syn_id) {
@@ -37,12 +37,20 @@ get_timezone_as_integer <- function(createdOnTimeZone) {
 }
 
 fetch_mpower <- function() {
-  mpower <- read_syn_table(STUDY_BURST_TABLE)
+  mpower <- read_syn_table(HEALTH_DATA_SUMMARY_TABLE)
   mpower$createdOnTimeZoneInteger <- unlist(purrr::map(mpower$createdOnTimeZone,
                                                        get_timezone_as_integer))
   mpower <- mpower %>% 
     mutate(createdOnLocalTime = createdOn + lubridate::hours(createdOnTimeZoneInteger)) %>% 
     rename(guid = externalId)
+  first_activity <- mpower %>% 
+    group_by(guid) %>%
+    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)),
+              currentDayInStudy = as.integer(
+                lubridate::today(tz="America/Los_Angeles") - first_activity),
+              currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
+  mpower <- left_join(mpower, first_activity) %>% 
+    mutate(dayInStudy = as.integer(lubridate::as_date(createdOnLocalTime) - first_activity))
   return(mpower)
 }
 
@@ -72,7 +80,10 @@ build_study_burst_summary <- function(mpower) {
       days_completed <- purrr::pmap_dfr(relevant_study_burst_dates,
         function(dates_guid, study_burst_number, study_burst_start_date, study_burst_end_date) {
           relevant_mpower <- mpower %>%
-            filter(guid == dates_guid, createdOn >= study_burst_start_date, createdOn <= study_burst_end_date)
+            filter(originalTable == "StudyBurst-v1",
+                   guid == dates_guid,
+                   createdOnLocalTime >= study_burst_start_date,
+                   createdOnLocalTime <= study_burst_end_date)
           days_completed_this_burst <- n_distinct(relevant_mpower$dayInStudy)
           # If the participant has not yet finished this study burst, store NA for days completed
           if (days_completed_this_burst == 0 && study_burst_end_date >= lubridate::today()) {
@@ -119,4 +130,3 @@ main <- function() {
 }
 
 main()
-
