@@ -52,9 +52,9 @@ def copy_file_handles(syn, new_records, source):
                         fileHandles = fhids_to_copy_i,
                         associateObjectTypes = ["TableEntity"] * len(fhids_to_copy_i),
                         associateObjectIds = [source] * len(fhids_to_copy_i),
-                        contentTypes = ["application/json"] * len(fhids_to_copy_i),
-                        fileNames = [None] * len(fhids_to_copy_i))
-                for j in [int(i['newFileHandle']['id']) for i in new_fhids_i['copyResults']]:
+                        newContentTypes = ["application/json"] * len(fhids_to_copy_i),
+                        newFileNames = [None] * len(fhids_to_copy_i))
+                for j in [int(i['newFileHandle']['id']) for i in new_fhids_i]:
                     new_fhids.append(j)
             new_fhids = pd.DataFrame(
                     {c['name']: fhids_to_copy,
