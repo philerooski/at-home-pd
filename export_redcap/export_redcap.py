@@ -4,6 +4,31 @@ import synapseclient as sc
 import os
 
 SYNAPSE_PARENT = "syn16809549"
+NON_STANDARD_FIELDS = [
+        'demographics_spd_complete',
+        'informed_consent_log_complete',
+        'notifications_complete',
+        'inclusion_exclusion_complete',
+        'bl_visit_date_complete',
+        'v01_visit_date_complete',
+        'v02_visit_date_complete',
+        'reportable_event_complete',
+        'mdsupdrs_complete',
+        'moca_complete',
+        'prebaseline_survey_complete',
+        'previsit_survey_complete',
+        'compliance_assessment_complete',
+        'substudy_moca_complete',
+        'visit_date_spd_complete',
+        'medical_history_complete',
+        'moca_spd_complete',
+        'pdq39_complete',
+        'general_healthprop_complete',
+        'psprop_complete',
+        'pdprop_complete',
+        'conclusion_complete',
+        'visit_status_complete',
+        'study_burst_reminders_complete']
 
 def read_args():
     parser = argparse.ArgumentParser()
@@ -45,10 +70,16 @@ def main():
                    credentials['synapsePassword'])
     proj = redcap.Project(url = credentials['redcapURL'],
                           token = credentials['redcapToken'])
-    exported_records_label = proj.export_records(raw_or_label = "label",
-            format = "df", export_survey_fields = True)
-    exported_records_raw = proj.export_records(raw_or_label = "raw",
-            format = "df", export_survey_fields = True)
+    exported_records_label = proj.export_records(
+            fields = proj.field_names + NON_STANDARD_FIELDS,
+            raw_or_label = "label",
+            format = "df",
+            export_survey_fields = True)
+    exported_records_raw = proj.export_records(
+            raw_or_label = "raw",
+            fields = proj.field_names + NON_STANDARD_FIELDS,
+            format = "df",
+            export_survey_fields = True)
     exported_records_label = filter_identifiers(exported_records_label)
     exported_records_raw = filter_identifiers(exported_records_raw)
     store_to_synapse(syn, exported_records_label, "exported_records.csv")
