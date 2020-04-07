@@ -28,7 +28,9 @@ BRIDGE_MAPPING <- list(
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {
   f <- synGet(syn_id)
-  df <- read_csv(f$path, locale = locale(encoding = encoding))
+  df <- read_csv(f$path,
+                 locale = locale(encoding = encoding),
+                 guess_max=10000)
   return(df)
 }
 
