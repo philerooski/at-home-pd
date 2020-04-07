@@ -29,7 +29,7 @@ NON_STANDARD_FIELDS = [
         'conclusion_complete',
         'visit_status_complete',
         'study_burst_reminders_complete',
-        #'subject_contact_info_complete', 400 error
+        'subject_contact_information_complete',
         'concomitant_medication_log_complete',
         'enrollment_confirmation_complete',
         'participant_demographics_complete',
