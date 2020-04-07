@@ -28,7 +28,27 @@ NON_STANDARD_FIELDS = [
         'pdprop_complete',
         'conclusion_complete',
         'visit_status_complete',
-        'study_burst_reminders_complete']
+        'study_burst_reminders_complete',
+        #'subject_contact_info_complete', 400 error
+        'concomitant_medication_log_complete',
+        'enrollment_confirmation_complete',
+        'participant_demographics_complete',
+        'screen_televisit_orientation_checklist_complete',
+        'smartphone_app_orientation_complete',
+        'modified_schwab_and_england_adl_complete',
+        'modified_clinical_global_impression_scale_complete',
+        'determination_of_falls_complete',
+        'preference_and_burden_bl_complete',
+        'preference_and_burden_visit_complete',
+        'smartphone_app_completion_complete',
+        'inclusion_exclusion_spd_complete',
+        'substudy_mdsupdrs_part_iii_complete',
+        'concomitant_medications_complete',
+        'participant_mdsupdrs_survey_complete',
+        'mdsupdrs_physician_exam_complete',
+        'patient_global_impression_scale_complete',
+        'clinical_global_impression_scale_complete',
+        'investigator_signature_complete']
 
 def read_args():
     parser = argparse.ArgumentParser()
