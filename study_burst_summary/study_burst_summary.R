@@ -1,8 +1,22 @@
+#' This script produces a table with columns:
+#' 
+#' * guid (str)
+#' * guid_prefix (str)
+#' * study_burst (str)
+#' * study_burst_start_date (str)
+#' * study_burst_end_date (str)
+#' * days_completed (int)
+#' * study_burst_successful (bool)
+#' 
+#' And stores this result to TABLE_OUTPUT (global var below).
+#' 
+#' This is more granular than the table produced by compliance_overview.R,
+#' which summarizes study burst compliance at the study burst level (Y1,Q1, etc.)
 library(synapser)
 library(tidyverse)
 
-SUPERUSERS_SUMMARY <- "syn20710121"
-TABLE_OUTPUT <- "syn21215274"
+HEALTH_DATA_SUMMARY_TABLE <- "syn17015960"
+TABLE_OUTPUT <- "syn20930854"
 
 read_syn_table <- function(syn_id) {
   q <- synTableQuery(paste("select * from", syn_id))
@@ -11,22 +25,41 @@ read_syn_table <- function(syn_id) {
   return(table)
 }
 
+get_timezone_as_integer <- function(createdOnTimeZone) {
+  # If there is no timezone information we make the conservative
+  # (for a US user) estimate that the time zone is Pacific
+  if (is.na(createdOnTimeZone)) {
+    return(-8)
+  } else {
+    cotz_integer <- as.integer(as.integer(createdOnTimeZone) / 100)
+    return(cotz_integer)
+  }
+}
+
 fetch_mpower <- function() {
-  user_offset <- read_syn_table(USER_OFFSET) %>% 
-    select(-ROW_ID, -ROW_VERSION)
-  mpower <- read_syn_table(MPOWER_SUMMARY) %>% 
-    filter(source == "MPOWER") %>% 
-    left_join(user_offset, by = c("guid", "source")) %>% 
-    mutate(createdOn = lubridate::with_tz(createdOn, "America/Los_Angeles"),
-           createdOn = createdOn - lubridate::days(day_offset)) %>% 
-    select(-day_offset)
+  mpower <- read_syn_table(HEALTH_DATA_SUMMARY_TABLE)
+  mpower$createdOnTimeZoneInteger <- unlist(purrr::map(mpower$createdOnTimeZone,
+                                                       get_timezone_as_integer))
+  mpower <- mpower %>% 
+    mutate(createdOnLocalTime = createdOn + lubridate::hours(createdOnTimeZoneInteger)) %>% 
+    rename(guid = externalId)
+  first_activity <- mpower %>% 
+    group_by(guid) %>%
+    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)),
+              currentDayInStudy = as.integer(
+                lubridate::today(tz="America/Los_Angeles") - first_activity),
+              currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
+  mpower <- left_join(mpower, first_activity) %>% 
+    mutate(dayInStudy = as.integer(lubridate::as_date(createdOnLocalTime) - first_activity))
   return(mpower)
 }
 
 build_study_burst_summary <- function(mpower) {
+  #' We make the conservative (for a US user) assumption that the current day is
+  #' relative to Pacific time.
   first_activity <- mpower %>% 
     group_by(activity_guid = guid) %>%
-    summarize(first_activity = lubridate::as_date(min(createdOn)),
+    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)),
               currentDayInStudy = as.integer(
                 lubridate::today(tz="America/Los_Angeles") - first_activity),
               currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
@@ -47,7 +80,10 @@ build_study_burst_summary <- function(mpower) {
       days_completed <- purrr::pmap_dfr(relevant_study_burst_dates,
         function(dates_guid, study_burst_number, study_burst_start_date, study_burst_end_date) {
           relevant_mpower <- mpower %>%
-            filter(guid == dates_guid, createdOn >= study_burst_start_date, createdOn <= study_burst_end_date)
+            filter(originalTable == "StudyBurst-v1",
+                   guid == dates_guid,
+                   createdOnLocalTime >= study_burst_start_date,
+                   createdOnLocalTime <= study_burst_end_date)
           days_completed_this_burst <- n_distinct(relevant_mpower$dayInStudy)
           # If the participant has not yet finished this study burst, store NA for days completed
           if (days_completed_this_burst == 0 && study_burst_end_date >= lubridate::today()) {
@@ -71,8 +107,7 @@ build_study_burst_summary <- function(mpower) {
            guid_prefix = str_extract(guid, "^.{3}")) %>% 
     arrange(guid, study_burst) %>% 
     select(guid, guid_prefix, study_burst, study_burst_start_date,
-           study_burst_end_date, days_completed, study_burst_successful) %>% 
-    filter(!is.na(guid))
+           study_burst_end_date, days_completed, study_burst_successful)
   study_burst_summary$study_burst <- dplyr::recode(
     study_burst_summary$study_burst, "0" = "Y1,Q1", "1" = "Y1,Q2", "2" = "Y1,Q3",
     "3" = "Y1,Q4", "4" = "Y2,Q1", "5" = "Y2,Q2", "6" = "Y2,Q3",
@@ -89,8 +124,7 @@ store_to_synapse <- function(study_burst_summary) {
 
 main <- function() {
   synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
-  mpower <- read_syn_table(SUPERUSERS_SUMMARY) %>%
-	  rename(guid = externalId, activity = originalTable)
+  mpower <- fetch_mpower()
   study_burst_summary <- build_study_burst_summary(mpower)
   store_to_synapse(study_burst_summary)
 }
