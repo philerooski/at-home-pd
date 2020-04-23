@@ -1,0 +1,153 @@
+---
+title: "AT-HOME PD Smartphone Baseline Analyses"
+output:
+  html_document:
+    df_print: paged
+---
+
+- All first burst, plot distributions wherever possible.
+- Mean (SD) number of active tasks performed during first burst
+  - break down by active task
+- Compliance with first burst
+- Which % of participants enrolled in passive data collection
+  - Mean (SD) passive data records collected per day for those who enrolled
+- Tapping interval, Turning time (gait) distribution
+  - Ask megha about a single feature (energy?) that is demonstrative of tremor task variability across participants.
+  - Within participants: use median of metric
+
+
+```{r include=FALSE}
+library(tidyverse)
+library(synapser)
+library(glue)
+
+HEALTH_DATA_SUMMARY_TABLE <- "syn17015960"
+
+synLogin()
+```
+
+```{r include=FALSE}
+stat_mode <- function(x, return_multiple = TRUE, na.rm = FALSE) {
+  if(na.rm){
+    x <- na.omit(x)
+  }
+  ux <- unique(x)
+  freq <- tabulate(match(x, ux))
+  mode_loc <- if(return_multiple) which(freq==max(freq)) else which.max(freq)
+  return(ux[mode_loc])
+}
+
+mutate_participant_day <- function(health_data_summary_table) {
+  first_activity <- health_data_summary_table %>% 
+    group_by(healthCode) %>%
+    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)))
+  health_data_summary_table <- left_join(health_data_summary_table, first_activity)
+  health_data_summary_table <- health_data_summary_table %>%
+    mutate(createdOnLocalDate = lubridate::as_date(createdOnLocalTime),
+           dayInStudy = as.integer(createdOnLocalDate - first_activity) + 1) %>% 
+    select(-first_activity, -createdOnLocalDate)
+  return(health_data_summary_table)
+}
+
+get_timezone_as_integer <- function(createdOnTimeZone) {
+  # If there is no timezone information we make the conservative
+  # (for a US user) estimate that the time zone is Pacific
+  if (is.na(createdOnTimeZone)) {
+    return(-8)
+  } else {
+    cotz_integer <- as.integer(as.integer(createdOnTimeZone) / 100)
+    return(cotz_integer)
+  }
+}
+```
+
+```{r include=FALSE}
+get_health_data_summary_table <- function() {
+  health_data_summary_table <- as_tibble(
+    synTableQuery(glue("SELECT * FROM { HEALTH_DATA_SUMMARY_TABLE }"))$asDataFrame())
+  # Add local time and participant day 
+  most_frequent_timezone <- health_data_summary_table %>% 
+    filter(originalTable == "StudyBurst-v1") %>% 
+    group_by(healthCode) %>%
+    summarize(mostFrequentTimeZone = stat_mode(
+      createdOnTimeZone, return_multiple = FALSE, na.rm = TRUE))
+  health_data_summary_table <- left_join(
+    health_data_summary_table, most_frequent_timezone) %>% 
+    mutate(mostFrequentTimeZone = replace_na(mostFrequentTimeZone, "-800")) # assume PDT
+  health_data_summary_table$createdOnTimeZoneInteger <- unlist(
+    purrr::map(health_data_summary_table$mostFrequentTimeZone, get_timezone_as_integer))
+  health_data_summary_table <- health_data_summary_table %>%  
+    mutate(createdOnLocalTime = createdOn + lubridate::hours(createdOnTimeZoneInteger))
+  health_data_summary_table <- mutate_participant_day(health_data_summary_table) %>% 
+    filter(dayInStudy <= 19) # we are only interested in the first burst (two weeks + 5 days)
+  return(health_data_summary_table)
+}
+
+health_data_summary_table <- get_health_data_summary_table()
+```
+
+```{r echo=FALSE}
+#' Plot distributions showing number of active tasks completed 
+#' during the first study burst period. Provide mean and SD for each active task
+average_number_of_active_tasks_first_burst <- function(health_data_summary_table) {
+  active_task_tables <- c("Tapping-v4", "WalkAndBalance-v1", "Tremor-v3") 
+  active_tasks <- health_data_summary_table %>% 
+    filter(originalTable %in% active_task_tables) %>% 
+    mutate(task = case_when(
+      originalTable == "Tremor-v3" ~ "Tremor",
+      originalTable == "Tapping-v4" ~ "Tapping",
+      originalTable == "WalkAndBalance-v1" ~ "Walk and Balance"))
+  mean_sd_active_tasks <- active_tasks %>% 
+    group_by(healthCode, task) %>% 
+    summarize(num_tasks = n()) %>% 
+    group_by(task) %>% 
+    summarize(mean_tasks_per_participant = mean(num_tasks),
+              sd_tasks_per_participant = sqrt(var(num_tasks)),
+              text = paste0(
+                round(mean_tasks_per_participant, 1),
+                "±",
+                round(sd_tasks_per_participant, 1)))
+  burst_plot <- active_tasks %>% 
+    group_by(healthCode, task) %>% 
+    summarize(num_tasks = n()) %>% 
+    left_join(mean_sd_active_tasks) %>% 
+    mutate(Task = paste0(task, " (", text, ")")) %>% 
+    ggplot(aes(num_tasks)) +
+    geom_density(aes(color = Task)) +
+    theme_minimal() +
+    theme(legend.position = c(0.8, 0.8),
+          legend.background = element_rect(fill = "white", color = "black")) +
+    labs(x = "Number of Tasks Performed", y = "Density",
+         title = "Active Tasks Completed During First Burst")
+  return(burst_plot)
+}
+
+average_number_of_active_tasks_first_burst(health_data_summary_table)
+```
+
+```{r echo=FALSE}
+#' Plot compliance by showing distribution of number of study bursts completed
+#' As well as mean and standard deviation for number of study bursts completed
+average_number_of_bursts_completed_first_burst <- function(health_data_summary_table) {
+  num_study_burst <- health_data_summary_table %>% 
+    distinct(healthCode, originalTable, dayInStudy) %>% # only one burst a day should be possible
+    group_by(healthCode) %>% 
+    summarize(num_bursts = sum(originalTable == "StudyBurst-v1"))
+  mean_sd_study_burst <- paste0(
+    round(mean(num_study_burst$num_bursts), 1),
+    "±",
+    round(sqrt(var(num_study_burst$num_bursts))))
+  study_burst_plot <- num_study_burst %>% 
+    ggplot(aes(num_bursts)) +
+    geom_bar(width = 0.5, color = "black", fill = "lightgray") +
+    theme_minimal() +
+    labs(x = "Bursts Completed", y = "Number of Participants",
+         title = "Number of Study Burst Activities Completed") +
+    annotate("label", label.padding = unit(0.5, "lines"), x = 16, y = 24,
+             label = paste0("Mean (SD) = ", mean_sd_study_burst))
+  return(study_burst_plot)
+}
+
+average_number_of_bursts_completed_first_burst(health_data_summary_table)
+```
+
