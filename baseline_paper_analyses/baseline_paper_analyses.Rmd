@@ -144,7 +144,7 @@ average_number_of_bursts_completed_first_burst <- function(health_data_summary_t
     labs(x = "Bursts Completed", y = "Number of Participants",
          title = "Number of Study Burst Activities Completed") +
     annotate("label", label.padding = unit(0.5, "lines"), x = 16, y = 24,
-             label = paste0("Mean (SD) = ", mean_sd_study_burst))
+             label = paste0("Mean±SD = ", mean_sd_study_burst))
   return(study_burst_plot)
 }
 
