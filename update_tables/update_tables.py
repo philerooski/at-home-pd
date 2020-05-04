@@ -42,7 +42,8 @@ def main():
             syn = syn,
             table_mapping = table_mapping,
             identifier_col = "healthCode",
-            identifier = relevant_healthcodes)
+            identifier = relevant_healthcodes,
+            copy_file_handles = True)
 
 
 if __name__ == "__main__":
