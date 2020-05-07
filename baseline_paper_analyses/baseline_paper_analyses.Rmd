@@ -89,6 +89,7 @@ health_data_summary_table <- get_health_data_summary_table()
 #' Plot distributions showing number of active tasks completed 
 #' during the first study burst period. Provide mean and SD for each active task
 average_number_of_active_tasks_first_burst <- function(health_data_summary_table) {
+  # TODO add back in users who did zero active tasks
   active_task_tables <- c("Tapping-v4", "WalkAndBalance-v1", "Tremor-v3") 
   active_tasks <- health_data_summary_table %>% 
     filter(originalTable %in% active_task_tables,
@@ -110,14 +111,22 @@ average_number_of_active_tasks_first_burst <- function(health_data_summary_table
   burst_plot <- active_tasks %>% 
     group_by(healthCode, task) %>% 
     summarize(num_tasks = n()) %>% 
+    ungroup() %>%
+    count(task, num_tasks) %>% 
     left_join(mean_sd_active_tasks) %>% 
-    mutate(Task = paste0(task, " (", text, ")")) %>% 
-    ggplot(aes(num_tasks)) +
-    geom_density(aes(color = Task)) +
+    mutate(`Task (Mean±SD)`= paste0(task, " (", text, ")")) %>% 
+    ggplot(aes(num_tasks, n)) +
+    #geom_density(aes(color = `Task (Mean±SD)`)) +
+    #geom_bar(aes(fill = Task)) +
+    geom_line(aes(color = `Task (Mean±SD)`),
+              size = 1.5, lineend="round", alpha = 0.85) +
+    #geom_point(aes(color = `Task (Mean±SD)`, shape = `Task (Mean±SD)`)) +
     theme_minimal() +
     theme(legend.position = c(0.8, 0.8),
-          legend.background = element_rect(fill = "white", color = "black")) +
-    labs(x = "Active Tasks", y = "Density",
+          legend.background = element_rect(fill = "white", color = "black"),
+          legend.key.height = unit(1, "cm"),
+          text = element_text(size = 18)) +
+    labs(x = "Active Tasks Completed", y = "Participant Count",
          title = "Active Tasks Completed During First Burst Window")
   return(burst_plot)
 }
@@ -142,10 +151,12 @@ average_number_of_bursts_completed_first_burst <- function(health_data_summary_t
     ggplot(aes(num_bursts)) +
     geom_bar(width = 0.5, color = "black", fill = "lightgray") +
     theme_minimal() +
-    labs(x = "Bursts Completed", y = "Participants",
+    theme(text = element_text(size = 18)) +
+    labs(x = "Burst Activities Completed", y = "Participant Count",
          title = "Study Burst Activities Completed During First Burst Window") +
     annotate("label", label.padding = unit(0.5, "lines"), x = 16, y = 24,
-             label = paste0("Mean±SD = ", mean_sd_study_burst))
+             label = paste0("Mean±SD = ", mean_sd_study_burst),
+             size = 6)
   return(study_burst_plot)
 }
 
@@ -153,8 +164,12 @@ average_number_of_bursts_completed_first_burst(health_data_summary_table)
 ```
 
 ```{r echo=FALSE}
+# Look at number of days _any_ passive data was contributed??
+# x axis: daysSinceConsent
+# y axis: average number of records contributed per individual per day
 passive_data_collection <- function(health_data_summary_table) {
-  passive_tables <- c("PassiveDisplacement-v4", "PassiveGait-v1")
+  # ignore PassiveDisplacement-v4
+  passive_tables <- c("PassiveGait-v1")
   passive_data <- health_data_summary_table %>%
     filter(originalTable %in% passive_tables)
   day_consented <- passive_data %>% 
@@ -176,16 +191,124 @@ passive_data_collection <- function(health_data_summary_table) {
   passive_data <- full_join(passive_data, all_possible_days_since_consent) %>% 
     mutate(numberOfPassiveActivities = replace_na(numberOfPassiveActivities, 0)) %>% 
     arrange(healthCode, daysSinceConsent)
+  mean_passive_records_per_day = mean(ungroup(passive_data)$numberOfPassiveActivities)
+  passive_data <- passive_data %>% 
+    group_by(daysSinceConsent) %>% 
+    summarize(averageNumberOfPassiveActivities = mean(numberOfPassiveActivities))
   # Are we more interested in the distribution or the number of participants?
+  # Mean (SD) is 5.84 (18.9). Does it even make sense to include them?
+  # We can include mean as a vertical dotted line in the distribution
+  # Median is 0
   passive_data %>% 
-    group_by(healthCode) %>% 
-    summarize(passiveActivitiesPerDay = mean(numberOfPassiveActivities)) %>% 
-    ggplot(aes(passiveActivitiesPerDay)) +
-    geom_density() +
+    ggplot(aes(daysSinceConsent, averageNumberOfPassiveActivities)) +
+    geom_bar(fill = "hotpink3", alpha = 0.8, width = 1, stat = "identity") +
+    geom_hline(aes(yintercept=mean_passive_records_per_day), linetype="dotted") +
+    annotate("text", x = 170, y = mean_passive_records_per_day + 0.5,
+             label = "Mean records per day") +
     theme_minimal() +
-    labs(x = "Passive Records", y = "Participants",
-         title = "Passive Records Contributed per Day")
+    labs(x = "Days Since Consent", y = "Passive Records",
+         title = "Average Number of Passive Records Contributed per Day")
 }
 
 passive_data_collection(health_data_summary_table)
+```
+
+```{r echo=FALSE}
+read_synapse_csv <- function(synapse_id) {
+  f <- synGet(synapse_id)
+  return(read_csv(f$path))
+}
+
+# Compate to clinical MDS-UPDRS measures
+# Gait: compare gait_rotation with UPDRSAMR (Remote Ambulatory Capacity)
+# Tapping: compare to C_NP3FTAPL (left hand) and C_NP3FTAPR (right hand)
+# Tremor: compare to C_
+plot_feature_distributions <- function(health_data_summary_table) {
+  gait_features <- read_synapse_csv("syn21988725")  
+  tapping_features <- read_synapse_csv("syn21995780")  
+  tremor_features <- read_synapse_csv("syn22014562")
+  mds <- read_synapse_csv("syn22005540")
+  handedness <- read_synapse_csv("syn21670521") %>% 
+    group_by(guid) %>% 
+    summarize(HandsWriting = stat_mode(HandsWriting, return_multiple = F, na.rm=T)) %>% 
+    mutate(HandsWriting = as.character(HandsWriting)) %>% 
+    filter(HandsWriting %in% c("1", "2", "4", "5")) %>% # (Always, Usually) x (Right, Left)
+    mutate(
+      DominantHand = case_when(
+        HandsWriting %in% c("1", "2") ~ "right",
+        HandsWriting %in% c("4", "5") ~ "left")) %>% 
+    select(guid, DominantHand)
+  # Add guid to all feature files
+  guids <- health_data_summary_table %>% 
+    distinct(healthCode, externalId)
+  gait_features <- inner_join(gait_features, guids) %>% 
+    rename(guid = externalId)
+  tapping_features <- inner_join(tapping_features, guids) %>% 
+    rename(guid = externalId)
+  tremor_features <- inner_join(tremor_features, guids) %>% 
+    rename(guid = externalId)
+  # add  relevant UPDRS scores to each feature file
+  gait_features <- gait_features %>% 
+    inner_join(select(mds, guid, UPDRSAMR)) %>% 
+    drop_na() %>% 
+    mutate(UPDRSAMR = as.character(UPDRSAMR))
+  tapping_features <- tapping_features %>% 
+    inner_join(handedness, by = "guid") %>% 
+    mutate(handedness = case_when(
+      hand == DominantHand ~ "Dominant",
+      hand != DominantHand ~ "Non-dominant")) %>% 
+    drop_na()
+    #inner_join(select(mds, guid, C_NP3FTAPL, C_NP3FTAPR)) %>% 
+    #drop_na() %>% 
+    #mutate(C_NP3FTAPL = as.character(C_NP3FTAPL),
+    #       C_NP3FTAPR = as.character(C_NP3FTAPR),
+    #       C_NP3FTAP = case_when(
+    #         hand == "left" ~ C_NP3FTAPL,
+    #         hand == "right" ~ C_NP3FTAPR)) %>% 
+    #select(-C_NP3FTAPL, -C_NP3FTAPR) # We don't want to accidentally use these
+  tremor_features <- tremor_features %>% 
+    inner_join(handedness, by = "guid") %>% 
+    mutate(handedness = case_when(
+      hand == DominantHand ~ "Dominant",
+      hand != DominantHand ~ "Non-dominant"))
+    #inner_join(select(mds, guid, C_NP3PTRMR, C_NP3PTRML)) %>% 
+    #inner_join(select(mds, guid, MAX_RTTR))
+    #mutate(C_NP3PTRMR = as.character(C_NP3PTRMR),
+    #       C_NP3PTRML= as.character(C_NP3PTRML),
+    #       C_NP3PTRM = case_when(
+    #         hand == "left" ~ C_NP3PTRML,
+    #         hand == "right" ~ C_NP3PTRMR)) %>% 
+    #select(-C_NP3PTRML, -C_NP3PTRMR) # We don't want to accidentally use these
+  # Plot controls from mPower 1 and age match with data from ahpd
+  gait_features %>% 
+    ggplot(aes(UPDRSAMR, rotation_omega)) +
+    geom_boxplot(fill = RColorBrewer::brewer.pal(6, "Reds"), color = "black") +
+    theme_minimal() +
+    labs(x = "Remote Ambulatory Capacity", y = "Rotation Speed (rad/s)",
+         title = "Turning Speed and Ambulatory Capacity")
+  # Look at dominant-minor hand feature distributions
+  # Plot controls from mPower 1 and age match with data from ahpd (tapping as well)
+  tapping_features %>% 
+    filter(medianTapInter < 1) %>% # not a realistic data point
+    rename(Hand = handedness) %>% 
+    ggplot(aes(medianTapInter)) +
+    geom_density(aes(color = Hand)) +
+    scale_x_continuous(trans = "log") +
+    theme_minimal() +
+    labs(x = "Average Intertap Interval", y = "Density",
+         title = "Tremor Energy Dominant vs Non-Dominant Hand")
+    #ggplot(aes(C_NP3FTAP, medianTapInter)) +
+    #geom_boxplot(fill = RColorBrewer::brewer.pal(4, "Oranges"), color = "black") +
+    labs(x = "3.4 Finger Tapping", y = "medianInterTap",
+         title = "medianInterTap and 3.4 Finger Tapping")
+  ### Re-run feature agg for energy tomorrow (mean -> median)
+  tremor_features %>% 
+    rename(Hand = handedness) %>% 
+    ggplot(aes(energy.tm)) +
+    geom_density(aes(color = Hand)) +
+    scale_x_continuous(trans = "log") +
+    theme_minimal() +
+    labs(x = "Average Energy", y = "Density",
+         title = "Tremor Energy Dominant vs Non-Dominant Hand")
+}
 ```
