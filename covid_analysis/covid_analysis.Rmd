@@ -1,0 +1,300 @@
+---
+title: "AT-HOME PD Data Pre/Post State of Emergency"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=4) 
+```
+
+```{r include=FALSE}
+library(synapser)
+library(tidyverse)
+
+synLogin()
+
+MERGED_DATASET <- "syn18693245"
+STATE_OF_EMERGENCY_DATE <- lubridate::as_date("2020-03-13")
+WINDOW_RADIUS <- lubridate::days(120)
+```
+
+**A dash-dot line on plots corresponds to `r STATE_OF_EMERGENCY_DATE`, the assumed state of emergency (SoE) date.**
+
+```{r include=FALSE}
+mpower_surveys <- c("Background-v1", "Demographics-v1", "Engagement-v1",
+                    "Medication-v1", "Medication-v3", "Motivation-v1",
+                    "Symptoms-v3", "Triggers-v3")
+mpower_active_tasks <- c("Tremor-v3", "Tapping-v4", "WalkAndBalance-v1")
+passive_activities <- c("PassiveGait-v1", "PassiveDisplacement-v4")
+
+get_ahpd_guids <- function(clinical = NULL, include_drop_outs = T) {
+  if (is.null(clinical)) {
+    clinical <- synhelper::synGetFile("syn17051543") # Rochester clinical
+  }
+  drop_outs <- clinical %>% 
+    filter(subj_status == paste("Subject discontinued participation before",
+                                "the planned study conclusion")) %>% 
+    distinct(guid)
+  guids <- clinical %>%
+    filter(redcap_event_name == "Baseline (Arm 1: Arm 1)",
+           !str_detect(guid, "TEST"),
+           viscompltyn == "Yes") %>% 
+    distinct(guid) %>% 
+    drop_na()
+  if (!include_drop_outs) {
+    guids <- guids %>% 
+      anti_join(drop_outs)
+  }
+  return(guids)
+}
+```
+
+```{r include=FALSE}
+get_merged_dataset <- function() {
+  ahpd_guids <- get_ahpd_guids()
+  window_of_interest <- c(STATE_OF_EMERGENCY_DATE - WINDOW_RADIUS,
+                          STATE_OF_EMERGENCY_DATE + WINDOW_RADIUS)
+  merged_dataset <- synTableQuery(
+    glue::glue("SELECT * FROM {MERGED_DATASET}"))$asDataFrame() %>% 
+    as_tibble() %>% 
+    inner_join(ahpd_guids, by = "guid") %>% 
+    drop_na(createdOn) %>% 
+    filter(createdOn > window_of_interest[[1]],
+           createdOn < window_of_interest[[2]]) %>% 
+    mutate(createdOnDate = lubridate::as_date(createdOn))
+  return(merged_dataset) 
+}
+
+merged_dataset <- get_merged_dataset()
+```
+
+## mPower
+
+Plots of mPower data show a 180-day window centered on the SoE date. That is, all participants had a single study burst window within the 90-day window shown before the SoE and all participants had a single study burst window in the 90-day interval shown after the SoE. (Although, at the time of creating this document, it's only been `r as.integer(lubridate::today() - STATE_OF_EMERGENCY_DATE)` days since our assumed SoE).
+
+### Passive Data Contributions
+
+```{r echo=FALSE}
+plot_passive_records <- function(merged_dataset) {
+  # We only want to consider a 90-day window on each side of the SoE
+  window_of_interest <- c(STATE_OF_EMERGENCY_DATE - lubridate::days(90),
+                          STATE_OF_EMERGENCY_DATE + lubridate::days(90))
+  merged_dataset <- merged_dataset %>% 
+    filter(createdOn > window_of_interest[[1]],
+           createdOn < window_of_interest[[2]])
+  merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% passive_activities) %>%
+    ggplot(aes(createdOnDate)) +
+    geom_bar(aes(fill = activity)) +
+    geom_vline(xintercept = STATE_OF_EMERGENCY_DATE, linetype="twodash") +
+    theme_minimal() +
+    labs(title = "Passive Records", x = "Date", y = "Count")
+}
+
+plot_passive_records(merged_dataset)
+```
+
+```{r, include=FALSE}
+SIGNIFICANT_AMOUNT_OF_RECORDS <- 10
+```
+
+The next plot attempts to show how much of this data is useable. Records contributed by users who completed a given activity `r SIGNIFICANT_AMOUNT_OF_RECORDS` or more times *both* before and after SoE are colored whereas other records are grayed out.
+```{r echo=FALSE}
+plot_pre_post_passive <- function(merged_dataset) {
+  # We only want to consider a 90-day window on each side of the SoE
+  window_of_interest <- c(STATE_OF_EMERGENCY_DATE - lubridate::days(90),
+                          STATE_OF_EMERGENCY_DATE + lubridate::days(90))
+  merged_dataset <- merged_dataset %>% 
+    filter(createdOn > window_of_interest[[1]],
+           createdOn < window_of_interest[[2]])
+  pre_emergency <- merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% passive_activities,
+           createdOnDate <= STATE_OF_EMERGENCY_DATE)
+  post_emergency <- merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% passive_activities,
+           createdOnDate > STATE_OF_EMERGENCY_DATE)
+  pre_emergency_significant_contributors <- pre_emergency %>%
+    group_by(guid) %>% 
+    count(activity) %>% 
+    filter(n >= SIGNIFICANT_AMOUNT_OF_RECORDS)
+  post_emergency_significant_contributors <- post_emergency %>% 
+    group_by(guid) %>% 
+    count(activity) %>% 
+    filter(n >= SIGNIFICANT_AMOUNT_OF_RECORDS)
+  significant_contributors <- post_emergency_significant_contributors %>% 
+    inner_join(select(pre_emergency_significant_contributors, -n),
+               by = c("guid", "activity")) %>% 
+    distinct(guid, activity)
+  number_of_significant_contributors <- n_distinct(significant_contributors$guid)
+  records_from_significant_contributors <- merged_dataset %>% 
+    inner_join(significant_contributors,
+               by = c("guid", "activity"))
+  number_of_significant_records <- n_distinct(records_from_significant_contributors$recordId)
+  date_counts <- merged_dataset %>% 
+    count(createdOnDate)
+  annotation_y_location <- max(date_counts$n)
+  annotation_x_location <- max(date_counts$createdOnDate) - lubridate::days(15)
+  merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% passive_activities) %>%
+    ggplot(aes(createdOnDate)) +
+    geom_bar(color = "lightgray", alpha = 0.6) +
+    geom_bar(data = records_from_significant_contributors,
+             mapping = aes(createdOnDate, fill = activity)) +
+    geom_vline(xintercept = STATE_OF_EMERGENCY_DATE, linetype="twodash") +
+    annotate("text", x=annotation_x_location, y = annotation_y_location,
+             label = glue::glue("Significant contributors: {number_of_significant_contributors}")) +
+    annotate("text", x=annotation_x_location, y = annotation_y_location - 40,
+             label = glue::glue("(Significant) records: {number_of_significant_records}")) +
+    theme_minimal() +
+    labs(title = "Passive Records From Significant Contributors", x = "Date", y = "Count")
+}
+
+plot_pre_post_passive(merged_dataset)
+```
+
+### Active Task Contributions
+
+Number of active tasks performed each day is **highly** correlated across tasks.
+
+```{r echo=FALSE}
+plot_active_tasks <- function(merged_dataset) {
+  # We only want to consider a 90-day window on each side of the SoE
+  window_of_interest <- c(STATE_OF_EMERGENCY_DATE - lubridate::days(90),
+                          STATE_OF_EMERGENCY_DATE + lubridate::days(90))
+  merged_dataset <- merged_dataset %>% 
+    filter(createdOn > window_of_interest[[1]],
+           createdOn < window_of_interest[[2]])
+  merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% mpower_active_tasks) %>%
+    ggplot(aes(createdOnDate)) +
+    geom_bar(aes(fill = activity)) +
+    geom_vline(xintercept = STATE_OF_EMERGENCY_DATE, linetype="twodash") +
+    theme_minimal() +
+    labs(title = "Active Task Records", x = "Date", y = "Count")
+}
+
+plot_active_tasks(merged_dataset)
+```
+
+```{r echo=FALSE}
+plot_pre_post_active <- function(merged_dataset) {
+  window_of_interest <- c(STATE_OF_EMERGENCY_DATE - lubridate::days(90),
+                          STATE_OF_EMERGENCY_DATE + lubridate::days(90))
+  merged_dataset <- merged_dataset %>% 
+    filter(createdOn > window_of_interest[[1]],
+           createdOn < window_of_interest[[2]])
+  pre_emergency <- merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% mpower_active_tasks,
+           createdOnDate <= STATE_OF_EMERGENCY_DATE)
+  post_emergency <- merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% mpower_active_tasks,
+           createdOnDate > STATE_OF_EMERGENCY_DATE)
+  pre_emergency_significant_contributors <- pre_emergency %>%
+    group_by(guid) %>% 
+    count(activity) %>% 
+    filter(n >= SIGNIFICANT_AMOUNT_OF_RECORDS)
+  post_emergency_significant_contributors <- post_emergency %>% 
+    group_by(guid) %>% 
+    count(activity) %>% 
+    filter(n >= SIGNIFICANT_AMOUNT_OF_RECORDS)
+  significant_contributors <- post_emergency_significant_contributors %>% 
+    inner_join(select(pre_emergency_significant_contributors, -n),
+               by = c("guid", "activity")) %>% 
+    distinct(guid, activity)
+  number_of_significant_contributors <- n_distinct(significant_contributors$guid)
+  records_from_significant_contributors <- merged_dataset %>% 
+    inner_join(significant_contributors,
+               by = c("guid", "activity"))
+  number_of_significant_records <- n_distinct(records_from_significant_contributors$recordId)
+  date_counts <- records_from_significant_contributors %>% 
+    count(createdOnDate)
+  #annotation_y_location <- max(date_counts$n)
+  annotation_x_location <- max(date_counts$createdOnDate) - lubridate::days(15)
+  merged_dataset %>%
+    filter(source == "MPOWER",
+           activity %in% mpower_active_tasks) %>%
+    ggplot(aes(createdOnDate)) +
+    geom_bar(color = "lightgray", alpha = 0.6) +
+    geom_bar(data = records_from_significant_contributors,
+             mapping = aes(createdOnDate, fill = activity)) +
+    geom_vline(xintercept = STATE_OF_EMERGENCY_DATE, linetype="twodash") +
+    annotate("text", x=annotation_x_location, y =100,
+             label = glue::glue("Significant contributors: {number_of_significant_contributors}")) +
+    annotate("text", x=annotation_x_location, y = 90,
+             label = glue::glue("(Significant) records: {number_of_significant_records}")) +
+    theme_minimal() +
+    labs(title = "Active Tasks From Significant Contributors", x = "Date", y = "Count")
+}
+
+plot_pre_post_active(merged_dataset)
+```
+
+## Clinical (Rochester/CTCC)
+
+Clinical tele-visits only happen once a year.
+
+```{r echo=FALSE}
+plot_clinical <- function(merged_dataset) {
+  merged_dataset %>% 
+    filter(source == "ROCHESTER") %>% 
+    distinct(guid, createdOnDate) %>% 
+    ggplot(aes(createdOnDate)) +
+    geom_histogram(binwidth = 7) +
+    geom_vline(xintercept = STATE_OF_EMERGENCY_DATE, linetype="twodash") +
+    theme_minimal() +
+    labs(title = "Clinical tele-visits each week",
+         x = "Date", y = "Visits This Week")
+}
+
+plot_clinical(merged_dataset)
+```
+
+## Fox Insight Surveys
+
+Fox Insight surveys are taken at regular intervals which depend on the survey. The most frequent surveys are meant to be taken quarterly (relative to registration date). Participants are given a 30-day window to complete the surveys, hence we have plotted all data over a 240-day window centered on the SoE date. (The largest possible interval between quarterly surveys is 90+30=120 days, hence we need to consider the 120 days before the SoE).
+
+The number of surveys taken after the SoE which were also completed by the same participant in the time window shown before the SoE are plotted in red.
+
+```{r echo=FALSE}
+plot_fox <- function(merged_dataset) {
+  pre_emergency_surveys <- merged_dataset %>% 
+    filter(source == "MJFF",
+           createdOnDate <= STATE_OF_EMERGENCY_DATE) %>% 
+    distinct(guid, createdOnDate, activity) %>% 
+    mutate(completed_before_emergency = TRUE)
+  post_emergency_surveys <- merged_dataset %>% 
+    filter(source == "MJFF",
+           createdOnDate > STATE_OF_EMERGENCY_DATE) %>% 
+    distinct(guid, createdOnDate, activity) %>% 
+    full_join(select(pre_emergency_surveys, -createdOnDate),
+              by = c("guid", "activity")) %>% 
+    mutate(completed_before_emergency = replace_na(
+      completed_before_emergency, FALSE))
+  # these surveys are "paired" with the same survey this user completed
+  # before a state of emergency was declared
+  post_emergency_surveys_paired <- post_emergency_surveys %>% 
+    filter(completed_before_emergency)
+  merged_dataset %>%
+    filter(source == "MJFF") %>% 
+    ggplot(aes(createdOnDate)) +
+    geom_histogram(binwidth = 7) +
+    geom_histogram(data = post_emergency_surveys_paired,
+                   binwidth = 7, fill = "red") +
+    geom_vline(xintercept = STATE_OF_EMERGENCY_DATE, linetype="twodash") +
+    theme_minimal() +
+    labs(title = "Fox Insight Forms Completed",
+         x = "Date", y = "Forms Completed This Week")
+}
+
+plot_fox(merged_dataset)
+```
