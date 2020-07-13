@@ -101,7 +101,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
             bridge.restPOST(
                     "/v4/externalids",
                     {"identifier": external_id,
-                     "substudyId": substudy})
+                     "studyId": substudy})
             bridge.restPOST(
                     "/v3/participants",
                     {"externalId": external_id,
@@ -143,7 +143,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
             bridge.restPOST(
                     "/v4/externalids",
                     {"identifier": external_id,
-                     "substudyId": substudy})
+                     "studyId": substudy})
             bridge.restPOST("/v3/participants/{}".format(user_id), user_info)
             return ("Success: Preexisting user account found. "
                     "New External ID assigned.")
