@@ -204,7 +204,7 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
                "left_motion.json", "right_motion.json", "trackedItems.items",
                "balance_motion.json", "walk_motion.json")
     df_with_file_cols_removed <- df %>%
-      select(!contains(file_cols))
+      select_if(!(names(.) %in% file_cols))
     return(df_with_file_cols_removed)
   })
   return(bridge_perturbed)
