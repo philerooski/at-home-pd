@@ -199,6 +199,14 @@ perturb_bridge_dates <- function(users, table_mapping = NULL) {
       distinct(recordId, .keep_all = TRUE)
     return(bridge_perturbed[col_order])
     })
+  bridge_perturbed <- purrr::map(bridge_perturbed, function(df) { # drop identifiable files
+    file_cols <- c("rawData", "left_tapping.samples", "right_tapping.samples",
+               "left_motion.json", "right_motion.json", "trackedItems.items",
+               "balance_motion.json", "walk_motion.json")
+    df_with_file_cols_removed <- df %>%
+      select(!contains(file_cols))
+    return(df_with_file_cols_removed)
+  })
   return(bridge_perturbed)
 }
 
