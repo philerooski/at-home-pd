@@ -4,7 +4,8 @@
 #' * complete (int)
 #' * partially_complete (int)
 #' * to_complete (int)
-#' * percent_complete (bool)
+#' * percent_complete (double)
+#' * percent_no_activity (double)
 #' 
 #' And stores the output to TABLE_OUTPUT (global var below)
 library(synapser)
@@ -41,9 +42,10 @@ build_compliance_overview <- function(study_burst_summary, study_burst_schedule)
               percent_compliant =  round(complete / (complete + partially_complete), 2)) %>% 
     left_join(num_no_activity) %>% 
     mutate(no_activity = replace_na(no_activity, 0),
-           partially_complete = partially_complete - no_activity) %>% 
+           partially_complete = partially_complete - no_activity,
+           percent_no_activity = round(no_activity / (no_activity + complete + partially_complete), 2)) %>% 
     select(study_burst, complete, partially_complete, no_activity,
-           to_complete, percent_compliant) %>% 
+           to_complete, percent_compliant, percent_no_activity) %>% 
     arrange(study_burst)
   return(compliance_overview)
 }
