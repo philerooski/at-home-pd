@@ -16,6 +16,7 @@ library(synapser)
 library(tidyverse)
 
 HEALTH_DATA_SUMMARY_TABLE <- "syn17015960"
+DAY_ONE_FILE <- "syn22345021"
 TABLE_OUTPUT <- "syn20930854"
 
 read_syn_table <- function(syn_id) {
@@ -43,40 +44,61 @@ fetch_mpower <- function() {
   mpower <- mpower %>% 
     mutate(createdOnLocalTime = createdOn + lubridate::hours(createdOnTimeZoneInteger)) %>% 
     rename(guid = externalId)
-  first_activity <- mpower %>% 
-    group_by(guid) %>%
-    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)),
-              currentDayInStudy = as.integer(
-                lubridate::today(tz="America/Los_Angeles") - first_activity),
-              currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
-  mpower <- left_join(mpower, first_activity) %>% 
-    mutate(dayInStudy = as.integer(lubridate::as_date(createdOnLocalTime) - first_activity))
   return(mpower)
 }
 
 build_study_burst_summary <- function(mpower) {
   #' We make the conservative (for a US user) assumption that the current day is
   #' relative to Pacific time.
-  first_activity <- mpower %>% 
-    group_by(activity_guid = guid) %>%
-    summarize(first_activity = lubridate::as_date(min(createdOnLocalTime, na.rm = T)),
-              currentDayInStudy = as.integer(
-                lubridate::today(tz="America/Los_Angeles") - first_activity),
+  day_one_dates <- read_csv(synGet(DAY_ONE_FILE)$path) %>% 
+    rename(activity_guid = externalId)
+  first_activity <- day_one_dates %>% 
+    mutate(currentDayInStudy = as.integer(
+                lubridate::today(tz="America/Los_Angeles") - day_one_local_date),
               currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
-  study_burst_dates <- purrr::map2_dfr(
-    first_activity$activity_guid, first_activity$first_activity, function(guid, first_activity) {
+  study_burst_dates <- purrr::pmap_dfr(first_activity,
+    function(activity_guid, day_one_local_date, currentDayInStudy, currentlyInStudyBurst) {
     dates <- purrr::map_dfr(0:7, function(i) {
-      tibble(dates_guid = guid,
+      tibble(dates_guid = activity_guid,
              study_burst_number = i,
-             study_burst_start_date = first_activity + i * lubridate::days(90),
-             study_burst_end_date = study_burst_start_date + lubridate::days(19))
+             study_burst_start_date = day_one_local_date + i * lubridate::days(90),
+             study_burst_end_date = study_burst_start_date + lubridate::days(19),
+             currentDayInStudy = currentDayInStudy,
+             currentlyInStudyBurst = currentlyInStudyBurst)
     })                                      
     return(dates)
   })
-  days_completed <- purrr::pmap_dfr(first_activity,
-    function(activity_guid, first_activity, currentDayInStudy, currentlyInStudyBurst) {
-      relevant_study_burst_dates <- study_burst_dates %>%
-        filter(dates_guid == activity_guid)
+  # TODO: check that the back-filled dayInStudy values look correct
+  mpower_complete <- mpower %>% 
+    left_join(first_activity, by = c("guid" = "activity_guid")) %>% 
+    mutate(dayInStudy = ifelse(
+      is.na(dayInStudy), as.integer(
+      lubridate::as_date(createdOnLocalTime) - day_one_local_date) + 1,
+      dayInStudy))
+  days_completed <- purrr::pmap_dfr(study_burst_dates,
+    function(dates_guid, study_burst_number, study_burst_start_date,
+             study_burst_end_date, currentDayInStudy, currentlyInStudyBurst) {
+      relevant_records <- mpower %>%
+        filter(guid == dates_guid,
+               createdOnLocalTime >= study_burst_start_date,
+               createdOnLocalTime <= study_burst_end_date,
+               originalTable == "StudyBurst-v1") %>% 
+        distinct(dayInStudy)
+      
+      if(nrow(relevant_records) == 0 && lubridate::today() < study_burst_end_date) {
+        days_completed <- NA
+      } else {
+        days_completed <- nrow(relevant_records)
+      }
+      days_completed_df <- tibble(
+        guid = dates_guid,
+        study_burst_number = study_burst_number,
+        study_burst_start_date = study_burst_start_date,
+        study_burst_end_date = study_burst_end_date,
+        days_completed = days_completed)
+     return(days_completed_df)
+  })
+      
       days_completed <- purrr::pmap_dfr(relevant_study_burst_dates,
         function(dates_guid, study_burst_number, study_burst_start_date, study_burst_end_date) {
           relevant_mpower <- mpower %>%
@@ -94,8 +116,6 @@ build_study_burst_summary <- function(mpower) {
                  days_completed = days_completed_this_burst,
                  study_burst_successful = days_completed >= 10)
       })
-      return(days_completed)
-  })
   study_burst_summary <- mpower %>% 
     distinct(guid) %>% 
     left_join(study_burst_dates, by = c("guid" = "dates_guid")) %>% 
@@ -129,4 +149,4 @@ main <- function() {
   store_to_synapse(study_burst_summary)
 }
 
-main()
+#main()

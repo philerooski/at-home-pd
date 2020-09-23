@@ -13,6 +13,7 @@ knitr::opts_chunk$set(fig.width=12, fig.height=4)
 ```{r include=FALSE}
 library(synapser)
 library(tidyverse)
+library(lubridate)
 
 synLogin()
 
@@ -73,7 +74,7 @@ merged_dataset <- get_merged_dataset()
 
 ## mPower
 
-Plots of mPower data show a 180-day window centered on the SoE date. That is, all participants had a single study burst window within the 90-day window shown before the SoE and all participants had a single study burst window in the 90-day interval shown after the SoE. (Although, at the time of creating this document, it's only been `r as.integer(lubridate::today() - STATE_OF_EMERGENCY_DATE)` days since our assumed SoE).
+Plots of mPower data show a 180-day window centered on the SoE date. That is, all participants had a single study burst window within the 90-day window shown before the SoE and all participants had a single study burst window in the 90-day interval shown after the SoE.
 
 ### Passive Data Contributions
 
