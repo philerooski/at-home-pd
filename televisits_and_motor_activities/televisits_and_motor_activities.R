@@ -1,8 +1,9 @@
 #' This script produces a table with columns:
 #' 
-#' * externalId (str)
-#' * date (date)
-#' * completed_motor_activities (int)
+#' * guid (str)
+#' * televisits (int)
+#' * completed_annual_televisit (bool)
+#' * completed_active_tasks_annual_visit (bool)
 #' 
 #' And stores the output to TABLE_OUTPUT (global var below)
 library(tidyverse)
