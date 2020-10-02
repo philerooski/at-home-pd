@@ -79,7 +79,7 @@ count_active_tasks <- function(health_data_summary) {
 
 # for answering how many participants did their activities w.r.t. tele-visit
 clinical_data <- function() {
-  clinical <- synhelper::synGetFile(CLINICAL_DATA) %>% 
+  clinical <- readr::read_csv(synGet(CLINICAL_DATA)$path) %>% 
     select(externalId = guid, visstatdttm) %>% 
     filter(!is.na(visstatdttm)) %>%
     mutate(date = lubridate::as_date(visstatdttm))
