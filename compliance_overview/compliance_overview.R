@@ -1,4 +1,4 @@
-#' This script produces a table with columns:
+#' This script produces a table derived from STUDY_BURST_SUMMARY (below) with columns:
 #' 
 #' * study_burst (str)
 #' * complete (int)
@@ -11,8 +11,7 @@
 library(synapser)
 library(tidyverse)
 
-STUDY_BURST_SUMMARY <- "syn20930854"
-STUDY_BURST_SCHEDULE <- "syn20930854"
+STUDY_BURST_SUMMARY <- Sys.getenv("studyBurstSummaryTable")
 TABLE_OUTPUT <- "syn21500168"
 
 read_syn_table <- function(syn_id) {
@@ -29,8 +28,8 @@ store_to_synapse <- function(compliance_overview) {
   synStore(t)
 }
 
-build_compliance_overview <- function(study_burst_summary, study_burst_schedule) {
-  num_no_activity <- study_burst_schedule %>% 
+build_compliance_overview <- function(study_burst_summary) {
+  num_no_activity <- study_burst_summary %>% 
     filter(lubridate::as_date(study_burst_start_date) <= lubridate::today(),
            days_completed == 0) %>% 
     count(study_burst, name = "no_activity")
@@ -53,9 +52,7 @@ build_compliance_overview <- function(study_burst_summary, study_burst_schedule)
 main <- function() {
   synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   study_burst_summary <- read_syn_table(STUDY_BURST_SUMMARY)
-  study_burst_schedule <- read_syn_table(STUDY_BURST_SCHEDULE)
-  compliance_overview <- build_compliance_overview(study_burst_summary,
-                                                   study_burst_schedule)
+  compliance_overview <- build_compliance_overview(study_burst_summary)
   store_to_synapse(compliance_overview)
 }
 
