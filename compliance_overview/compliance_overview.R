@@ -12,7 +12,7 @@ library(synapser)
 library(tidyverse)
 
 STUDY_BURST_SUMMARY <- Sys.getenv("studyBurstSummaryTable")
-TABLE_OUTPUT <- "syn21500168"
+TABLE_OUTPUT <- Sys.getenv("outputTable")
 
 read_syn_table <- function(syn_id) {
   q <- synTableQuery(paste("select * from", syn_id))
