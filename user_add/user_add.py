@@ -99,12 +99,8 @@ def process_request(bridge, participant_info, phone_number, external_id,
             engagement_groups.append(random.choice(["gr_ST_T", "gr_ST_F"]))
             engagement_groups.append(random.choice(["gr_DT_F", "gr_DT_T"]))
             bridge.restPOST(
-                    "/v4/externalids",
-                    {"identifier": external_id,
-                     "studyId": substudy})
-            bridge.restPOST(
                     "/v3/participants",
-                    {"externalId": external_id,
+                    {"externalIds": {substudy: external_id},
                      "phone": {"number": phone_number,
                                "regionCode": "US"},
                      "dataGroups": engagement_groups + ["clinical_consent"],
@@ -115,7 +111,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
                     "Does your phone number have a US area code and/or "
                     "has the GUID already been assigned? "
                     "Console output: {0}".format(e))
-    elif 'externalId' not in participant_info['items'][0]:
+    elif 'externalIds' not in participant_info['items'][0]:
         try:
             # add external_id and then assign to existing account
             user_id = participant_info['items'][0]['id']
@@ -139,11 +135,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
                 user_info["dataGroups"] = user_info["dataGroups"] + \
                         [random.choice(["gr_DT_F", "gr_DT_T"])]
             user_info["sharingScope"] = "all_qualified_researchers"
-            user_info["externalId"] = external_id
-            bridge.restPOST(
-                    "/v4/externalids",
-                    {"identifier": external_id,
-                     "studyId": substudy})
+            user_info["externalIds"] = {substudy: external_id}
             bridge.restPOST("/v3/participants/{}".format(user_id), user_info)
             return ("Success: Preexisting user account found. "
                     "New External ID assigned.")
@@ -151,13 +143,13 @@ def process_request(bridge, participant_info, phone_number, external_id,
             return ("Error: Preexising user account found. "
                     "Could not assign new external ID. "
                     "Console output: {0}".format(e))
-    elif participant_info['items'][0]['externalId'] != external_id:
+    elif participant_info['items'][0]['externalIds'][substudy] != external_id:
         # phone and external ID have already been assigned
         return ("Error: Preexisting account found with guid {}. "
                 "Please contact {} "
                 "if you would like to assign a new guid.".format(
-                    participant_info['items'][0]['externalId'], support_email))
-    elif participant_info['items'][0]['externalId'] == external_id:
+                    participant_info['items'][0]['externalIds'][substudy], support_email))
+    elif participant_info['items'][0]['externalIds'][substudy] == external_id:
         # account exists and is correct, do nothing
         return ("Success: Preexisting account found with matching phone number "
                 "and guid.")
