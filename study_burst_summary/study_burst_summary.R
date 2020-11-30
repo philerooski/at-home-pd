@@ -65,7 +65,7 @@ build_study_burst_summary <- function(mpower) {
               currentlyInStudyBurst = currentDayInStudy %% 90 < 20)
   study_burst_dates <- purrr::map2_dfr(
     first_activity$activity_guid, first_activity$first_activity, function(guid, first_activity) {
-    dates <- purrr::map_dfr(0:7, function(i) {
+    dates <- purrr::map_dfr(0:8, function(i) {
       tibble(dates_guid = guid,
              study_burst_number = i,
              study_burst_start_date = first_activity + i * lubridate::days(90),
@@ -111,7 +111,7 @@ build_study_burst_summary <- function(mpower) {
   study_burst_summary$study_burst <- dplyr::recode(
     study_burst_summary$study_burst, "0" = "Y1,Q1", "1" = "Y1,Q2", "2" = "Y1,Q3",
     "3" = "Y1,Q4", "4" = "Y2,Q1", "5" = "Y2,Q2", "6" = "Y2,Q3",
-    "7" = "Y2,Q4")
+    "7" = "Y2,Q4", "8" = "Y3,Q1")
   return(study_burst_summary)
 }
 
@@ -119,7 +119,9 @@ store_to_synapse <- function(study_burst_summary) {
   q <- synTableQuery(paste("select * from", TABLE_OUTPUT))
   synDelete(q) # Remove preexisting rows
   t <- synTable(TABLE_OUTPUT, study_burst_summary)  
-  synStore(t)
+  synStore(t, executed=paste0("https://github.com/Sage-Bionetworks/at-home-pd/",
+                              "blob/master/study_burst_summary/",
+                              "study_burst_summary.R"))
 }
 
 main <- function() {
