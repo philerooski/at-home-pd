@@ -208,8 +208,11 @@ def is_valid_phone_number(phone_number):
         return False
 
 
-def is_valid_guid(guid):
-    p = re.compile("(NIH-)?\w{4}-\w{3}-\w{3}")
+def is_valid_guid(guid, substudy):
+    if substudy == "at-home-pd":
+        p = re.compile("(NIH-)?\w{4}-\w{3}-\w{3}")
+    elif substudy == "Udall-superusers":
+        p = re.compile("(NIH)?\w{4}\w{3}\w{3}")
     match = re.match(p, guid)
     if match is not None:
         return True
@@ -276,7 +279,7 @@ def main():
                                              "number",
                                              phone_number, guid, visit_date,
                                              credentials["outputTable"])
-            elif not is_valid_guid(guid):
+            elif not is_valid_guid(guid, credentials["substudy"]):
                 table_row = create_table_row("Error: The guid is improperly "
                                              "formatted. Please enter a valid guid "
                                              "in XXXX-XXX-XXX format "
