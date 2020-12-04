@@ -80,7 +80,9 @@ count_active_tasks <- function(health_data_summary) {
 # for answering how many participants did their activities w.r.t. tele-visit
 clinical_data <- function() {
   clinical <- readr::read_csv(synGet(CLINICAL_DATA)$path) %>% 
-    select(externalId = guid, visstatdttm) %>% 
+    filter(redcap_event_name %in% c("Month 12 (Arm 1: Arm 1)",
+                                    "Month 24 (Arm 1: Arm 1)")) %>% 
+    select(externalId = guid, redcap_event_name, visstatdttm) %>% 
     filter(!is.na(visstatdttm)) %>%
     mutate(date = lubridate::as_date(visstatdttm))
   return(clinical)
@@ -100,16 +102,20 @@ main <- function() {
   clinical <- clinical_data()
   results <- clinical %>% 
     inner_join(active_task_counter, by = c("externalId", "date")) %>% 
-    group_by(externalId) %>% 
     mutate( 
-      max_televisit_time_diff = max(date) - min(date),
-      completed_active_tasks_annual_visit = any(
-        date == max(date) & max_televisit_time_diff > 330 & completed_motor_activities)) %>% 
+      completed_active_tasks_year_one = (
+        redcap_event_name == "Month 12 (Arm 1: Arm 1)" && completed_motor_activities),
+      completed_active_tasks_year_two = (
+        redcap_event_name == "Month 24 (Arm 1: Arm 1)" && completed_motor_activities)) %>% 
+    group_by(externalId) %>% 
     summarize(televisits = n(),
-              completed_active_tasks_annual_visit = any(completed_active_tasks_annual_visit),
-              completed_annual_televisit = any(max_televisit_time_diff > 330)) %>% 
+              completed_active_tasks_year_one = any(completed_active_tasks_year_one),
+              completed_active_tasks_year_two = any(completed_active_tasks_year_two),
+              completed_year_one_televisit = any(redcap_event_name == "Month 12 (Arm 1: Arm 1)"),
+              completed_year_two_televisit = any(redcap_event_name == "Month 24 (Arm 1: Arm 1)")) %>% 
     select(guid = externalId, televisits,
-           completed_annual_televisit, completed_active_tasks_annual_visit)
+           completed_year_one_televisit, completed_year_two_televisit,
+           completed_active_tasks_year_one, completed_active_tasks_year_two)
   store_to_synapse(results) 
 }
 
