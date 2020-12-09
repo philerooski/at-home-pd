@@ -111,31 +111,31 @@ def process_request(bridge, participant_info, phone_number, external_id,
                     "Does your phone number have a US area code and/or "
                     "has the GUID already been assigned? "
                     "Console output: {0}".format(e))
-    elif 'externalIds' not in participant_info['items'][0]:
+    elif substudy not in participant_info['items'][0]['externalIds']:
         try:
             # add external_id and then assign to existing account
             user_id = participant_info['items'][0]['id']
             user_info = bridge.restGET("/v3/participants/{}".format(user_id))
             if "clinical_consent" not in user_info["dataGroups"]:
                 user_info["dataGroups"] = user_info["dataGroups"] + ["clinical_consent"]
-            if ("gr_SC_DB" not in user_info["dataGroups"] or
-                "gr_SC_CS" not in user_info["dataGroups"]):
+            if not ("gr_SC_DB" in user_info["dataGroups"] or
+                    "gr_SC_CS" in user_info["dataGroups"]):
                 user_info["dataGroups"] = user_info["dataGroups"] + \
                         [random.choice(["gr_SC_DB", "gr_SC_CS"])]
-            if ("gr_BR_AD" not in user_info["dataGroups"] or
-                "gr_BR_II" not in user_info["dataGroups"]):
+            if not ("gr_BR_AD" in user_info["dataGroups"] or
+                    "gr_BR_II" in user_info["dataGroups"]):
                 user_info["dataGroups"] = user_info["dataGroups"] + \
                         [random.choice(["gr_BR_AD", "gr_BR_II"])]
-            if ("gr_ST_T" not in user_info["dataGroups"] or
-                "gr_ST_F" not in user_info["dataGroups"]):
+            if not ("gr_ST_T" in user_info["dataGroups"] or
+                    "gr_ST_F" in user_info["dataGroups"]):
                 user_info["dataGroups"] = user_info["dataGroups"] + \
                         [random.choice(["gr_ST_T", "gr_ST_F"])]
-            if ("gr_DT_F" not in user_info["dataGroups"] or
-                "gr_DT_T" not in user_info["dataGroups"]):
+            if not ("gr_DT_F" in user_info["dataGroups"] or
+                    "gr_DT_T" in user_info["dataGroups"]):
                 user_info["dataGroups"] = user_info["dataGroups"] + \
                         [random.choice(["gr_DT_F", "gr_DT_T"])]
             user_info["sharingScope"] = "all_qualified_researchers"
-            user_info["externalIds"] = {substudy: external_id}
+            user_info["externalIds"][substudy]  = external_id
             bridge.restPOST("/v3/participants/{}".format(user_id), user_info)
             return ("Success: Preexisting user account found. "
                     "New External ID assigned.")
