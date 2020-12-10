@@ -15,8 +15,8 @@
 library(synapser)
 library(tidyverse)
 
-HEALTH_DATA_SUMMARY_TABLE <- "syn17015960"
-TABLE_OUTPUT <- "syn20930854"
+HEALTH_DATA_SUMMARY_TABLE <- Sys.getenv("inputTable")
+TABLE_OUTPUT <- Sys.getenv("outputTable")
 
 read_syn_table <- function(syn_id) {
   q <- synTableQuery(paste("select * from", syn_id))
@@ -119,9 +119,9 @@ store_to_synapse <- function(study_burst_summary) {
   q <- synTableQuery(paste("select * from", TABLE_OUTPUT))
   synDelete(q) # Remove preexisting rows
   t <- synTable(TABLE_OUTPUT, study_burst_summary)  
-  synStore(t, executed=paste0("https://github.com/Sage-Bionetworks/at-home-pd/",
-                              "blob/master/study_burst_summary/",
-                              "study_burst_summary.R"))
+  synStore(t, executed=list(
+    paste0("https://github.com/Sage-Bionetworks/at-home-pd/",
+    "blob/master/study_burst_summary/study_burst_summary.R")))
 }
 
 main <- function() {
