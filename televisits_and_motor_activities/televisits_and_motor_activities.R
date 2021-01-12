@@ -104,9 +104,9 @@ main <- function() {
     inner_join(active_task_counter, by = c("externalId", "date")) %>% 
     mutate( 
       completed_active_tasks_year_one = (
-        redcap_event_name == "Month 12 (Arm 1: Arm 1)" && completed_motor_activities),
+        redcap_event_name == "Month 12 (Arm 1: Arm 1)" & completed_motor_activities),
       completed_active_tasks_year_two = (
-        redcap_event_name == "Month 24 (Arm 1: Arm 1)" && completed_motor_activities)) %>% 
+        redcap_event_name == "Month 24 (Arm 1: Arm 1)" & completed_motor_activities)) %>% 
     group_by(externalId) %>% 
     summarize(televisits = n(),
               completed_active_tasks_year_one = any(completed_active_tasks_year_one),
