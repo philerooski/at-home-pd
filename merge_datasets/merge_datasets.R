@@ -24,94 +24,97 @@ BRIDGE_MAPPING <- list(
 TABLE_OUTPUT <- "syn18693245"
 
 read_syn_csv <- function(syn_id, encoding = "UTF-8") {
-  f <- synGet(syn_id)
-  df <- read_csv(f$path, locale = locale(encoding = encoding))
+  f <- synapser::synGet(syn_id)
+  df <- readr::read_csv(f$path,
+                        locale = readr::locale(encoding = encoding))
   return(df)
 }
 
 read_syn_table <- function(syn_id) {
-  q <- synTableQuery(paste("select * from", syn_id))
-  table <- q$asDataFrame() %>% 
-    as_tibble() #%>% 
-    #select(-ROW_ID, -ROW_VERSION)
+  q <- synapser::synTableQuery(paste("select * from", syn_id))
+  table <- q$asDataFrame() %>%
+    as_tibble()
   return(table)
 }
 
 summarize_rochester <- function() {
   dataset <- read_syn_csv(ROCHESTER)
-  visit_dates <- distinct(dataset, guid, visstatdttm)
+  visit_dates <- dplyr::distinct(dataset, guid, visstatdttm)
   data_dictionary <- read_syn_csv(ROCHESTER_DATA_DICTIONARY)
   forms <- unique(data_dictionary[["Form Name"]])
-  summarized_dataset <- merge(visit_dates, forms, all=TRUE) %>% 
-    rename(activity = y, createdOn = visstatdttm) %>% 
+  summarized_dataset <- merge(visit_dates, forms, all = TRUE) %>%
+    rename(activity = y, createdOn = visstatdttm) %>%
     mutate(activity = as.character(activity),
            createdOn = lubridate::as_datetime(createdOn),
-           source = "ROCHESTER") %>% 
+           source = "ROCHESTER") %>%
     as_tibble()
-  summarized_dataset <- summarized_dataset %>% 
-    mutate(hash_key = if_else(is.na(createdOn),
-                              str_c(guid, "NA"),
+  summarized_dataset <- summarized_dataset %>%
+mutate(hash_key = if_else(is.na(createdOn),
+                      str_c(guid, "NA"),
                               str_c(guid, createdOn)),
            recordId = unlist(purrr::map(
-             hash_key, ~ digest::digest(., algo = "md5")))) %>% 
+             hash_key, ~ digest::digest(., algo = "md5")))) %>%
     select(-hash_key)
   return(summarized_dataset)
 }
 
 summarize_mjff <- function() {
-  files <- synGetChildren(MJFF_PARENT)$asList()
+  files <- synapser::synGetChildren(MJFF_PARENT)$asList()
   names(files) <- lapply(files, function(f) f$id)
   datasets <- purrr::map(files, ~ read_syn_csv(.$id))
   summarized_dataset <- purrr::map2_dfr(files, datasets, function(f, df) {
-    activity <- stringr::str_match(f$name, "deidentified_((\\w|-)+)(_\\d+)?\\.csv")[,2]
+    activity <- stringr::str_match(
+        f$name, "deidentified_((\\w|-)+)(_\\d+)?\\.csv")[, 2]
     if (str_ends(activity, "_\\d\\d")) {
-      str_sub(activity, nchar(activity)-2, nchar(activity)) <- ""
+        stringr::str_sub(activity, nchar(activity) - 2, nchar(activity)) <- ""
     }
-    if (activity != "users") {
-      summarized_dataset <- df %>% 
-        select(guid, createdOn = study_date) %>% 
+    if (activity != "Genetic_old") {
+      summarized_dataset <- df %>%
+        select(guid, createdOn = study_date) %>%
         mutate(createdOn = lubridate::as_datetime(createdOn),
                activity = activity,
                source = "MJFF")
     } else {
-      summarized_dataset <- df %>% 
-        select(guid) %>% 
+      summarized_dataset <- df %>%
+        select(guid) %>%
         mutate(createdOn = NA, activity = activity, source = "MJFF")
     }
   })
-  summarized_dataset <- summarized_dataset %>% 
+  summarized_dataset <- summarized_dataset %>%
     mutate(hash_key = str_c(guid, createdOn),
            recordId = unlist(purrr::map(
-             hash_key, ~ digest::digest(., algo = "md5")))) %>% 
+             hash_key, ~ digest::digest(., algo = "md5")))) %>%
     select(-hash_key)
   return(summarized_dataset)
 }
 
 summarize_bridge <- function() {
-  original_tables <- read_syn_table(BRIDGE_SUMMARY) %>% 
+  original_tables <- read_syn_table(BRIDGE_SUMMARY) %>%
     select(recordId, guid = externalId, createdOn, appVersion,
-           phoneInfo, dataGroups, activity = originalTable) %>% 
+           phoneInfo, dataGroups, activity = originalTable) %>%
     filter(activity != "sms-messages-sent-from-bridge-v1",
-           activity != "StudyBurstReminder-v1") %>% 
+           activity != "StudyBurstReminder-v1") %>%
     mutate(source = "MPOWER",
-           createdOn = lubridate::as_datetime(createdOn, tz="America/Los_Angeles"))
+           createdOn = lubridate::as_datetime(
+             createdOn, tz = "America/Los_Angeles"))
   return(original_tables)
 }
 
 mutate_participant_week_day <- function(summarized_all) {
   first_activity <- summarized_all %>%
-    filter(source == "MPOWER") %>% 
-    group_by(guid) %>%
-    summarise(first_activity_time = min(createdOn, na.rm=T))
-  summarized_all <- full_join(summarized_all, first_activity)
-  summarized_all_mpower <- summarized_all %>% 
     filter(source == "MPOWER") %>%
-    mutate(createdOnDate = lubridate::as_date(createdOn, tz="America/Los_Angeles"),
-           dayInStudy = (createdOnDate - lubridate::as_date(
-             first_activity_time, tz="America/Los_Angeles")) + 1)
-  summarized_all <- summarized_all %>% 
-    anti_join(summarized_all_mpower, by = "recordId") %>% 
-    bind_rows(summarized_all_mpower) %>% 
+    group_by(guid) %>%
+    summarise(first_activity_time = min(createdOn, na.rm = T))
+  summarized_all <- dplyr::full_join(summarized_all, first_activity)
+  summarized_all_mpower <- summarized_all %>%
+    filter(source == "MPOWER") %>%
+    mutate(createdOnDate = lubridate::as_date(
+        createdOn, tz = "America/Los_Angeles"),
+        dayInStudy = (createdOnDate - lubridate::as_date(
+             first_activity_time, tz = "America/Los_Angeles")) + 1)
+  summarized_all <- summarized_all %>%
+    anti_join(summarized_all_mpower, by = "recordId") %>%
+    bind_rows(summarized_all_mpower) %>%
     select(-first_activity_time, -createdOnDate)
   return(summarized_all)
 }
@@ -119,20 +122,26 @@ mutate_participant_week_day <- function(summarized_all) {
 update_store_merged_datasets <- function(summarized_all) {
   preexisting_summary <- synTableQuery(
     paste("select * from", TABLE_OUTPUT))$asDataFrame()
-  new_records <- summarized_all %>% 
+  new_records <- summarized_all %>%
     anti_join(preexisting_summary, by = "recordId")
-  synStore(synapser::Table(TABLE_OUTPUT, new_records))
+  synapser::synStore(synapser::Table(TABLE_OUTPUT, new_records),
+                     executed = list(paste0(
+        "https://github.com/Sage-Bionetworks/at-home-pd/blob/master/",
+        "merge_datasets/merge_datasets.R")))
 }
 
 main <- function() {
-  synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
+  synapser::synLogin(
+    Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   summarized_mjff <- summarize_mjff()
   summarized_rochester <- summarize_rochester()
   summarized_bridge <- summarize_bridge()
-  summarized_all <- bind_rows(summarized_mjff, summarized_rochester, summarized_bridge) %>%
-    mutate_participant_week_day() %>% 
+  summarized_all <- bind_rows(
+    summarized_mjff, summarized_rochester, summarized_bridge) %>%
+    mutate_participant_week_day() %>%
     select(recordId, guid, source, activity, dplyr::everything())
   update_store_merged_datasets(summarized_all)
 }
 
 main()
+
