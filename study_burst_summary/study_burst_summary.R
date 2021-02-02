@@ -51,7 +51,7 @@ build_study_burst_schedule <- function(mpower, previous_schedule_id) {
   previous_schedule <- read_syn_table(previous_schedule_id)
   new_participants <- mpower %>% 
     filter(!is.na(guid)) %>%
-    anti_join(previous_schedule, by = "guid") %>% 
+    anti_join(previous_schedule, by = "guid") %>%
     select(guid)
   if (nrow(new_participants) == 0) {
     current_schedule <- previous_schedule %>% 
