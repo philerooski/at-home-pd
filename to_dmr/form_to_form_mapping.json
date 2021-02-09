@@ -1,273 +1,233 @@
 {
     "PDBP_AdverseEvents_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             }
         ]
     },
     "PDBP_InclExclCriteria_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["inclusion_exclusion"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["inclusion_exclusion_spd"]
             }
         ]
     },
     "PDBP_NeurologicalExam_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             }
         ]
     },
     "PDBP_BehavioralHistory_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             }
         ]
     },
     "PDBP_Vital Signs_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             }
         ]
     },
     "PDBP_BloodCollection_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             }
         ]
     },
     "PDBP_EarlyTerminationQuest_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
+                "source_form": [
 
                 ]
             }
         ]
     },
     "PDBP_Demographics_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["participant_demographics"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["demographics_spd"]
             }
         ]
     },
     "PDBP_InformedConsent_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["inclusion_exclusion"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["inclusion_exclusion_spd"]
             }
         ]
     },
     "PDBP_FamilyHistory_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": [ ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": [ ]
             }
         ]
     },
     "PDBP_MDS-UPDRS_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["mdsupdrs"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
+                "source_form": [
+                    "substudy_mdsupdrs_part_iii",
+                    "participant_mdsupdrs_survey",
+                    "mdsupdrs_physician_exam"
                 ]
             }
         ]
     },
     "PDBP_PriorAndConcomitantMeds_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["concomitant_medication_log"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["concomitant_medications"]
             }
         ]
     },
     "PDBP_MoCA_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["moca"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["moca_spd"]
             }
         ]
     },
     "PDBP_MayoSleepQuestionnaire_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": [ ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": [ ]
             }
         ]
     },
     "PDBP_LBD InclusnXclusn_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["inclusion_exclusion"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["inclusion_exclusion_spd"]
             }
         ]
     },
     "PDBP_PDQ-39_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": [ ]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["pdq39"]
             }
         ]
     },
     "PDBP_ModSchwabAndEnglandScale_dataElementExport.csv": {
-        "cohorts": [
+        "cohort": [
             {
                 "name": "at-home-pd",
-                "source_forms": [
-
-                ]
+                "source_form": ["modified_schwab_and_england_adl"]
             },
             {
                 "name": "super-pd",
-                "source_forms": [
-
-                ]
+                "source_form": [ ]
             }
         ]
     }
