@@ -101,6 +101,7 @@ def process_request(bridge, participant_info, phone_number, external_id,
             bridge.restPOST(
                     "/v3/participants",
                     {"externalIds": {substudy: external_id},
+                     "checkForConsent": False,
                      "phone": {"number": phone_number,
                                "regionCode": "US"},
                      "dataGroups": engagement_groups + ["clinical_consent"],
@@ -135,8 +136,10 @@ def process_request(bridge, participant_info, phone_number, external_id,
                 user_info["dataGroups"] = user_info["dataGroups"] + \
                         [random.choice(["gr_DT_F", "gr_DT_T"])]
             user_info["sharingScope"] = "all_qualified_researchers"
-            user_info["externalIds"][substudy]  = external_id
             bridge.restPOST("/v3/participants/{}".format(user_id), user_info)
+            bridge.restPOST("/v5/studies/{}/enrollments".format(substudy),
+                    {"userId": user_id, "consentRequired": False,
+                     "externalId": external_id})
             return ("Success: Preexisting user account found. "
                     "New External ID assigned.")
         except Exception as e:
