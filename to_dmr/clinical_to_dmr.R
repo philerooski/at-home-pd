@@ -2,6 +2,7 @@
 #' format which conforms to the appropriate PDBP DMR schema.
 
 library(dplyr)
+library(glue)
 
 #' Parse mandatory DMR schema fields from a clinical record
 get_universal_fields <- function(record, visit_date_col, dob_mapping,
@@ -60,47 +61,121 @@ build_dob_mapping <- function(clinical) {
   return(all_dob)
 }
 
-#' Parse concomitant medication record for DMR
+#' Parse concomitant medication record for DMR, AT-HOME PD Cohort
 #'
 #' Participants can have multiple concomitant medication records for a single
 #' visit, hence this type of record needs to be handled specially.
 #' This function extracts fields MedctnPriorConcomRteTyp, MedctnPriorConcomName,
 #' MedctnPriorConcomDoseMsrTxt, MedctnPriorConcomDoseUoM, MedctnPriorConcomFreqTxt,
 #' and MedctnPriorConcomPD. Other fields specific to this form are set to NA.
-parse_concomitant_medication_record <- function(record, mapping) {
+#' Super PD data is stored in a different format, see
+#' parse_concomitant_medication_record_spd
+parse_concomitant_medication_record_ahpd <- function(record, mapping) {
   med_map <- mapping[["concomitant_medication_log"]]
   is_pd_med <- record$pd_med_yn == "Yes"
   route <- value_map(med_map, "route", record$route)
   route_oth <- value_map(med_map, "route_oth", record$route_oth)
   pd_meds <- value_map(med_map, "pd_meds", record$pd_meds)
-  pd_med_oth <- value_map(med_map, "pd_med_oth", record$pd_med_oth)
+  pd_med_other <- value_map(med_map, "pd_med_other", record$pd_med_other)
   freq <- value_map(med_map, "freq", record$freq)
   freq_oth <- value_map(med_map, "freq_oth", record$freq_oth)
-  dose_numeric <- ifelse(is.na(as.numeric(record$dose)), NA, record$dose)
+  units  <- value_map(med_map, "units", record$units)
+  units_oth  <- value_map(med_map, "units", record$units_oth)
   dmr_record <- tibble(
       MedctnPriorConcomRteTyp = case_when(
-        !is.null(route) ~ route,
-        !is.null(route_oth) ~ route_oth,
-        TRUE ~ record$route),
+        !is.na(route) ~ route,
+        !is.na(route_oth) ~ route_oth,
+        TRUE ~ NA),
       MedctnPriorConcomPD = case_when(
-        is_pd_med && !is.null(pd_meds) ~ pd_meds,
-        is_pd_med && pd_med_oth != "" ~ pd_med_oth,
-        TRUE ~ record$pd_med_oth),
+        is_pd_med && !is.na(pd_meds) ~ pd_meds,
+        is_pd_med && !is.na(pd_med_other) ~ pd_med_other,
+        TRUE ~ NA),
       MedctnPriorConcomName = case_when(
-        is_pd_med && pd_med_oth == "" ~ record$pd_med_other,
+        is_pd_med && is.na(pd_med_other) ~ record$pd_med_other,
         !is_pd_med ~ record$non_pd_med),
-      MedctnPriorConcomMinsLstDose = NA,
-      MedctnPriorConcomHrsLstDose = NA,
-      MedctnPriorConcomIndTxt = record$indication
+      MedctnPriorConcomIndTxt = record$indication,
       MedctnPriorConcomFreqTxt = case_when(
-        !is.null(freq) ~ freq,
-        !is.null(freq_oth) ~ freq_oth,
-        TRUE ~ record$freq_oth),
-      MedctnPriorConcomDoseMsrTxt = case_when
-      )
+        !is.na(freq) ~ freq,
+        !is.na(freq_oth) ~ freq_oth,
+        TRUE ~ NA),
+      MedctnPriorConcomDoseMsrTxt = record$dose,
+      MedctnPriorConcomDoseUoM = case_when(
+        record$units == "other" ~ ifelse(!is.na(units_oth), units_oth, NA),
+        !is.na(units) ~ units,
+        !is.na(units_oth) ~ units_oth,
+        TRUE ~ NA),
+      MedctnPriorConcomMinsLstDose = NA_integer_,
+      MedctnPriorConcomHrsLstDose = NA_integer_)
+  return(dmr_record)
+}
+
+
+#' Parse concomitant medication record for DMR, SUPER PD Cohort
+#'
+#' Participants can have multiple concomitant medication records for a single
+#' visit, hence this type of record needs to be handled specially.
+#' This function extracts fields MedctnPriorConcomRteTyp, MedctnPriorConcomName,
+#' MedctnPriorConcomDoseMsrTxt, MedctnPriorConcomDoseUoM, MedctnPriorConcomFreqTxt,
+#' and MedctnPriorConcomPD. Other fields specific to this form are set to NA.
+#' In contrast to AT-HOME PD, SUPER-PD medications are recorded as a single record
+#' for each participant. Fields for a specific medication can be grouped by their
+#' numeric suffix, e.g., conmed_1, conmed_dose_amt_1, conmed_dose_unit_1, etc.
+#' AT-HOME PD data is stored in a different format, see
+#' parse_concomitant_medication_record_ahpd
+parse_concomitant_medication_record_spd <- function(record, mapping) {
+  med_map <- mapping[["concomitant_medications"]]
+  num_medications <- as.integer(record$conmed_num)
+  dmr_records <- purrr::map_dfr(1:num_medications, function(n) {
+    is_pd_med <- record[[glue("conmed_pd_{n}")]] == "Yes"
+    conmed <- value_map(med_map, "conmed", record[[glue("conmed_{n}")]])
+    conmed_dose_amt <- record[[glue("conmed_dose_amt_{n}")]]
+    conmed_dose_unit <- value_map(
+      med_map, "conmed_dose_unit", record[[glue("conmed_dose_unit_{n}")]])
+    conmed_dose_unit_other <- value_map(
+      med_map, "conmed_dose_unit_other", record[[glue("conmed_dose_unit_other_{n}")]])
+    conmed_dose_frequency <- value_map(
+      med_map, "conmed_dose_frequency", record[[glue("conmed_dose_frequency_{n}")]])
+    conmed_dose_frequency_other <- value_map(
+      med_map, "conmed_dose_frequency_other",
+      record[[glue("conmed_dose_frequency_other_{n}")]])
+    conmed_dose_route <- value_map(
+      med_map, "conmed_dose_route", record[[glue("conmed_dose_route_{n}")]])
+    conmed_dose_route_other <- value_map(
+      med_map, "conmed_dose_route_other", record[[glue("conmed_dose_route_other_{n}")]])
+    conmed_indication <- record[[glue("conmed_indication_{n}")]]
+    dmr_record <- tibble(
+        MedctnPriorConcomRteTyp = case_when(
+          !is.na(conmed_dose_route) ~ conmed_dose_route,
+          !is.na(conmed_dose_route_other) ~ conmed_dose_route_other,
+          TRUE ~ NA_character_),
+        MedctnPriorConcomPD = case_when(
+          !is.na(conmed) ~ conmed,
+          TRUE ~ NA_character_),
+        MedctnPriorConcomName = case_when(
+          is.na(conmed) ~ record[[glue("conmed_{n}")]],
+          TRUE ~ conmed),
+        MedctnPriorConcomIndTxt = conmed_indication,
+        MedctnPriorConcomFreqTxt = case_when(
+          !is.na(conmed_dose_frequency) ~ conmed_dose_frequency,
+          !is.na(conmed_dose_frequency_other) ~ conmed_dose_frequency_other,
+          TRUE ~ NA_character_),
+        MedctnPriorConcomDoseMsrTxt = conmed_dose_amt,
+        MedctnPriorConcomDoseUoM = case_when(
+          record[[glue("conmed_dose_unit_{n}")]] == "other" ~ ifelse(!is.na(conmed_dose_unit_other), conmed_dose_unit_other, NA_character_),
+          !is.na(conmed_dose_unit) ~ conmed_dose_unit,
+          !is.na(conmed_dose_unit_other) ~ conmed_dose_unit_other,
+          TRUE ~ NA_character_),
+        MedctnPriorConcomMinsLstDose = NA_integer_,
+        MedctnPriorConcomHrsLstDose = NA_integer_)
+    return(dmr_record)
+  })
+  return(dmr_records)
 }
 
 value_map <- function(mapping, field, key) {
+  if (is.na(key) || !(key %in% names(mapping[[field]]))) {
+    return(NA_character_)
+  }
   value <- mapping[[field]][[key]]
   return(value)
 }
