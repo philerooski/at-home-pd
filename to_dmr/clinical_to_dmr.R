@@ -70,6 +70,9 @@ build_dob_mapping <- function(clinical) {
 #' and MedctnPriorConcomPD. Other fields specific to this form are set to NA.
 #' Super PD data is stored in a different format, see
 #' parse_concomitant_medication_record_spd
+#' @param record A one-row dataframe from the clinical data containing a single record
+#' @param mapping The value mapping. A list with heirarchy form > field identifier.
+#' @return A tibble with fields specific to concomitant medications
 parse_concomitant_medication_record_ahpd <- function(record, mapping) {
   med_map <- mapping[["concomitant_medication_log"]]
   is_pd_med <- record$pd_med_yn == "Yes"
@@ -122,6 +125,9 @@ parse_concomitant_medication_record_ahpd <- function(record, mapping) {
 #' numeric suffix, e.g., conmed_1, conmed_dose_amt_1, conmed_dose_unit_1, etc.
 #' AT-HOME PD data is stored in a different format, see
 #' parse_concomitant_medication_record_ahpd
+#' @param record A one-row dataframe from the clinical data containing a single record
+#' @param mapping The value mapping. A list with heirarchy form > field identifier.
+#' @return A tibble with fields specific to concomitant medications
 parse_concomitant_medication_record_spd <- function(record, mapping) {
   med_map <- mapping[["concomitant_medications"]]
   num_medications <- as.integer(record$conmed_num)
@@ -172,12 +178,31 @@ parse_concomitant_medication_record_spd <- function(record, mapping) {
   return(dmr_records)
 }
 
+#' Parse MDS-UPDRS record for AT-HOME PD cohort
+#'
+#' @param record A one-row dataframe from the clinical data containing a single record
+#' @param field_mapping
+#' @param value_mapping The value mapping. A list with heirarchy form > field identifier.
+#' @return A tibble with fields specific to concomitant medications
+parse_mdsupdrs_ahpd <- function(record, field_mapping, value_mapping) {
+  visit <- record$visittyppdbpmds
+
+}
+
+parse_mdsupdrs_spd <- function(record, field_mapping, value_mapping, visit) {
+
+}
+
 value_map <- function(mapping, field, key) {
   if (is.na(key) || !(key %in% names(mapping[[field]]))) {
     return(NA_character_)
   }
   value <- mapping[[field]][[key]]
   return(value)
+}
+
+field_map <- function(mapping, field, cohort, visit) {
+
 }
 
 main <- function() {
