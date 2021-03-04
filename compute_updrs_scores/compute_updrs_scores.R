@@ -63,12 +63,12 @@ main <- function(){
     #' compute updrs score and write to .tsv
     ahpd_updrs_scores <- get_ahpd_clinical_data() %>%
         map_column_names("ahpd") %>%
-        run_updrs_scoring(join_cols = c("guid", "createdOn")) %>%
+        run_updrs_scoring(
+            join_cols = c("guid", "createdOn", "C_ONLDOPA")) %>%
         write.table(OUTPUT_FILENAME , sep = "\t", row.names=F, quote=F)
     #' store result to synapse
-    f <- sc$File(OUTPUT_FILENAME, 
-                 SYNAPSE_PARENT_ID)
-    syn$store(f, activity = sc$Activity(
+    f <- File(OUTPUT_FILENAME, SYNAPSE_PARENT_ID)
+    synStore(f, activity = Activity(
         "retrieve raw walk features",
         used = c(CLINICAL_DATA_SYN_ID),
         executed = GIT_URL))
