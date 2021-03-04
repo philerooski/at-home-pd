@@ -12,6 +12,7 @@ synLogin()
 
 #' Synapse reference 
 CLINICAL_DATA_SYN_ID <- "syn18565500"
+EXCEL_LOOKUP_SYN_ID <- "syn25050918"
 SYNAPSE_PARENT_ID <- "syn16809549"
 OUTPUT_FILENAME <- "computed_ahpd_updrs_scores.tsv"
 
@@ -20,11 +21,8 @@ GIT_URL <- file.path(
     "https://github.com/arytontediarjo/at-home-pd/blob/master",
     "compute_updrs_score", 
     "compute_updrs_score.R")
-    
-#' Global Variables
-CTCC_UPDRS_LOOKUP <- file.path(
-    "compute_updrs_score", 
-    "ctcc_lookup_table.tsv")
+
+#' Final scoring metrics
 SCORES <- c(
     "UPDRS1", "UPDRS2", "UPDRS3", 
     "UPDRS3R", "UPDRS3", "UPDRSAMB",
@@ -69,7 +67,8 @@ main <- function(){
     f <- File(OUTPUT_FILENAME, SYNAPSE_PARENT_ID)
     synStore(f, activity = Activity(
         "retrieve raw walk features",
-        used = c(CLINICAL_DATA_SYN_ID),
+        used = c(CLINICAL_DATA_SYN_ID, 
+                 EXCEL_LOOKUP_SYN_ID),
         executed = GIT_URL))
     unlink(OUTPUT_FILENAME)
 }
