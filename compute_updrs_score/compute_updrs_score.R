@@ -8,7 +8,7 @@ library(tidyr)
 library(data.table)
 library(synapser)
 library(githubr)
-source("compute_updrs_scores/scoring_utils.R")
+source("compute_updrs_score/scoring_utils.R")
 synLogin()
 
 #' Synapse reference 
@@ -19,12 +19,12 @@ OUTPUT_FILENAME <- "computed_ahpd_updrs_scores.tsv"
 #' instantiate github
 GIT_URL <- file.path(
     "https://github.com/arytontediarjo/at-home-pd/blob/master",
-    "compute_updrs_scores", 
-    "compute_updrs_scores.R")
+    "compute_updrs_score", 
+    "compute_updrs_score.R")
     
 #' Global Variables
 CTCC_UPDRS_LOOKUP <- file.path(
-    "compute_updrs_scores", 
+    "compute_updrs_score", 
     "ATHOMEPD_CTCC_MDS-UPDRS_lookup_20200229_edited.xlsx")
 SCORES <- c(
     "UPDRS1", "UPDRS2", "UPDRS3", 
