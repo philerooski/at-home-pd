@@ -7,7 +7,6 @@ library(tidyverse)
 library(tidyr)
 library(data.table)
 library(synapser)
-library(githubr)
 source("compute_updrs_score/scoring_utils.R")
 synLogin()
 
