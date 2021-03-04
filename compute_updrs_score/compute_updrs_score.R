@@ -18,7 +18,7 @@ OUTPUT_FILENAME <- "computed_ahpd_updrs_scores.tsv"
 
 #' instantiate github
 GIT_URL <- file.path(
-    "https://github.com/arytontediarjo/at-home-pd/blob/master",
+    "https://github.com/Sage-Bionetworks/at-home-pd/blob/master",
     "compute_updrs_score", 
     "compute_updrs_score.R")
 
