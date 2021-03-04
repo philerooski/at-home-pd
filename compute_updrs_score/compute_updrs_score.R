@@ -24,7 +24,7 @@ GIT_URL <- file.path(
 #' Global Variables
 CTCC_UPDRS_LOOKUP <- file.path(
     "compute_updrs_score", 
-    "ATHOMEPD_CTCC_MDS-UPDRS_lookup_20200229_edited.xlsx")
+    "ctcc_lookup_table.tsv")
 SCORES <- c(
     "UPDRS1", "UPDRS2", "UPDRS3", 
     "UPDRS3R", "UPDRS3", "UPDRSAMB",

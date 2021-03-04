@@ -86,7 +86,8 @@ get_updrs_score_reference <- function(){
 #' @param updrs_metric: which updrs metrics you are looking for
 #' (UPDRS1, UPDRS2, UPDRS3, UPDRS3R, UPDRSTOT, UPDRSAMBL, UPDRSAMR, MAX_PKTR, MAX_RTTR)
 get_updrs_mapping <- function(updrs_metric = NULL){
-    mapping <- readxl::read_excel(CTCC_UPDRS_LOOKUP) %>%
+    mapping <- fread(CTCC_UPDRS_LOOKUP) %>%
+        tibble::as_tibble() %>%
         dplyr::filter(`Form Name` %in%
                           c("mdsupdrs",
                             "prebaseline_survey",
