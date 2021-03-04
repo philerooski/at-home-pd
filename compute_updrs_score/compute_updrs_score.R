@@ -66,7 +66,7 @@ main <- function(){
     #' store result to synapse
     f <- File(OUTPUT_FILENAME, SYNAPSE_PARENT_ID)
     synStore(f, activity = Activity(
-        "retrieve raw walk features",
+        "compute updrs scores",
         used = c(CLINICAL_DATA_SYN_ID, 
                  EXCEL_LOOKUP_SYN_ID),
         executed = GIT_URL))
