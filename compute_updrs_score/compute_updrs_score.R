@@ -69,26 +69,31 @@ get_super_physician_scores <- function(field_mapping, physician_visit) {
              cohort == "super-pd",
              visit == physician_visit) %>%
       drop_na()
+    date_col <- case_when(
+        physician_visit == "Physician_OFF" ~ "time_mdsupdrs",
+        physician_visit == "Physician_ON" ~ "time_mdsupdrs_off")
     scores <- clinical_records %>%
         dplyr::filter(guid != "TESTING",
                       !is.na(mdsupdrsoffon)) %>%
-        dplyr::select(guid, relevant_fields$clinical_variable)
+        dplyr::select(guid, createdOn = {{ date_col }}, relevant_fields$clinical_variable)
     col_map <- readxl::read_excel(synGet(EXCEL_LOOKUP_SYN_ID)$path) %>%
       dplyr::select(
              field_name = `Variable / Field Name`,
              form_name = `Form Name`,
              ctcc_name = `CTCC Name`)
     scores_with_ctcc_names <- scores %>%
-      pivot_longer(-guid, names_to="field_name") %>%
+      pivot_longer(-c("guid", "createdOn"), names_to="field_name") %>%
       inner_join(col_map, by = "field_name") %>%
-      select(guid, ctcc_name, value) %>%
+      select(guid, createdOn, ctcc_name, value) %>%
       drop_na() %>%
       distinct(guid, ctcc_name, .keep_all=T) %>%
       mutate(ctcc_name = unlist(purrr::map(ctcc_name, ~ paste0("C_", .)))) %>%
-      pivot_wider(id_cols="guid", names_from="ctcc_name", values_from="value")
+      pivot_wider(id_cols=c("guid", "createdOn"),
+                  names_from="ctcc_name",
+                  values_from="value")
     updrs_scores <- scores_with_ctcc_names %>%
-      compute_updrs_total_scores(join_cols="guid") %>%
-      select(guid, UPDRS1, UPDRS2, UPDRS3, UPDRS3R,
+      compute_updrs_total_scores(join_cols=c("guid", "createdOn")) %>%
+      select(guid, createdOn, UPDRS1, UPDRS2, UPDRS3, UPDRS3R,
              UPDRS4, UPDRSAMB, UPDRSAMR, UPDRSPRO)
     return(updrs_scores)
 }
