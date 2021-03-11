@@ -4,7 +4,7 @@
 #' @author: Aryton Tediarjo
 ##################################################
 
-#' function to retrieve NA 
+#' function to retrieve NA
 #' thresholds for each UPDRS metrics
 get_na_threshold_conditions <- function(){
     thresholds <- list()
@@ -23,36 +23,36 @@ get_na_threshold_conditions <- function(){
 #' function to retrieve reference based on SAS code
 get_updrs_score_reference <- function(){
     UPDRS_LIST <- list()
-    UPDRS_LIST$UPDRS1 <- c("C_NP1COG", "C_NP1HALL", 
+    UPDRS_LIST$UPDRS1 <- c("C_NP1COG", "C_NP1HALL",
                            "C_NP1DPRS","C_NP1ANXS",
-                           "C_NP1APAT", "C_NP1DDS", 
+                           "C_NP1APAT", "C_NP1DDS",
                            "C_NP1SLPN", "C_NP1SLPD",
-                           "C_NP1PAIN", "C_NP1URIN", 
-                           "C_NP1CNST", "C_NP1LTHD", 
+                           "C_NP1PAIN", "C_NP1URIN",
+                           "C_NP1CNST", "C_NP1LTHD",
                            "C_NP1FATG")
-    UPDRS_LIST$UPDRS2 <- c("C_NP2SPCH", "C_NP2SALV", 
+    UPDRS_LIST$UPDRS2 <- c("C_NP2SPCH", "C_NP2SALV",
                            "C_NP2SWAL", "C_NP2EAT",
-                           "C_NP2DRES", "C_NP2HYGN", 
+                           "C_NP2DRES", "C_NP2HYGN",
                            "C_NP2HWRT", "C_NP2HOBB",
-                           "C_NP2TURN", "C_NP2TRMR", 
+                           "C_NP2TURN", "C_NP2TRMR",
                            "C_NP2RISE", "C_NP2WALK",
                            "C_NP2FREZ")
     UPDRS_LIST$UPDRS3 <- c(
-        "C_NP3SPCH",  "C_NP3FACXP", 
+        "C_NP3SPCH",  "C_NP3FACXP",
         "C_NP3RIGN", "C_NP3RIGRU",
-        "C_NP3RIGLU", "C_NP3RIGRL", 
+        "C_NP3RIGLU", "C_NP3RIGRL",
         "C_NP3RIGLL", "C_NP3FTAPR",
-        "C_NP3FTAPL", "C_NP3HMOVR", 
+        "C_NP3FTAPL", "C_NP3HMOVR",
         "C_NP3HMOVL", "C_NP3PRSPR",
-        "C_NP3PRSPL", "C_NP3TTAPR", 
-        "C_NP3TTAPL", "C_NP3LGAGR", 
+        "C_NP3PRSPL", "C_NP3TTAPR",
+        "C_NP3TTAPL", "C_NP3LGAGR",
         "C_NP3LGAGL", "C_NP3RISNG",
-        "C_NP3GAIT",  "C_NP3FRZGT", 
-        "C_NP3POSTR", "C_NP3BRADY", 
+        "C_NP3GAIT",  "C_NP3FRZGT",
+        "C_NP3POSTR", "C_NP3BRADY",
         "C_NP3PTRMR", "C_NP3PTRML",
-        "C_NP3KTRMR", "C_NP3KTRML", 
-        "C_NP3RTARU", "C_NP3RTALU", 
-        "C_NP3RTARL", "C_NP3RTALL", 
+        "C_NP3KTRMR", "C_NP3KTRML",
+        "C_NP3RTARU", "C_NP3RTALU",
+        "C_NP3RTARL", "C_NP3RTALL",
         "C_NP3RTALJ", "C_NP3RTCON", "C_NP3PSTBL")
     UPDRS_LIST$UPDRS3R <- c("C_NP3SPCH", "C_NP3FACXP", "C_NP3FTAPR",
                             "C_NP3FTAPL", "C_NP3HMOVR", "C_NP3HMOVL",
@@ -173,7 +173,8 @@ compute_updrs_total_scores <- function(data, join_cols){
     purrr::map(updrs_metrics_list, function(metric){
         message(glue::glue("calculating UPDRS metric: ", metric))
         result <- tryCatch({
-            updrs_info <- data %>% map_updrs_curate_info(metric, keep = join_cols)
+            updrs_info <- data %>%
+              map_updrs_curate_info(metric, keep_cols = join_cols)
             updrs_info$data %>%
                 dplyr::mutate(non_na_count = rowSums(!is.na(select(., any_of(
                     get_updrs_score_reference()[[metric]]))))) %>%
