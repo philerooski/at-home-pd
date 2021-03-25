@@ -18,6 +18,7 @@ library(bridgeclient)
 
 HEALTH_DATA_SUMMARY_TABLE <- Sys.getenv("inputTable")
 TABLE_OUTPUT <- Sys.getenv("outputTable")
+GUID_PREFIX_LENGTH <- Sys.getenv("guidPrefixLength")
 
 read_syn_table <- function(syn_id) {
   q <- synapser::synTableQuery(paste("select * from", syn_id))
@@ -55,12 +56,12 @@ build_study_burst_schedule <- function(mpower, previous_schedule_id) {
     distinct(guid)
   if (nrow(new_participants) == 0) {
     current_schedule <- previous_schedule %>%
-      select(guid, study_burst, study_burst_start_date, study_burst_end_date)
+      distinct(guid, study_burst, study_burst_start_date, study_burst_end_date)
   } else {
     bridge_login(study = "sage-mpower-2",
                  email = Sys.getenv("bridgeUsername"),
                  password = Sys.getenv("bridgePassword"))
-    new_schedule <- purrr::map_dfr(new_participants$guid, function(guid) {
+    new_schedule <- purrr::map_dfr(unique(new_participants$guid), function(guid) {
       participant_info <- bridgeclient::get_participant(guid)
       activity_events <- bridgeclient::get_activity_events(participant_info$id) %>%
         bind_rows() %>%
@@ -74,7 +75,7 @@ build_study_burst_schedule <- function(mpower, previous_schedule_id) {
                  lubridate::as_datetime(timestamp, tz = "US/Pacific")),
                study_burst_end_date = study_burst_start_date + lubridate::days(19),
                guid = guid) %>%
-        select(guid, study_burst, study_burst_start_date, study_burst_end_date) %>%
+        distinct(guid, study_burst, study_burst_start_date, study_burst_end_date) %>%
         arrange(study_burst)
     })
     new_schedule$study_burst <- dplyr::recode(
@@ -86,13 +87,13 @@ build_study_burst_schedule <- function(mpower, previous_schedule_id) {
       mutate(study_burst_start_date = as.character(study_burst_start_date),
              study_burst_end_date = as.character(study_burst_end_date))
     current_schedule <- previous_schedule %>%
-      select(guid, study_burst, study_burst_start_date, study_burst_end_date) %>%
+      distinct(guid, study_burst, study_burst_start_date, study_burst_end_date) %>%
       bind_rows(new_schedule)
   }
   return(current_schedule)
 }
 
-build_study_burst_summary <- function(mpower, study_burst_schedule) {
+build_study_burst_summary <- function(mpower, study_burst_schedule, guid_prefix_length) {
   #' We make the conservative (for a US user) assumption that the current day is
   #' relative to Pacific time.
   days_completed <- purrr::pmap_dfr(study_burst_schedule,
@@ -126,7 +127,8 @@ build_study_burst_summary <- function(mpower, study_burst_schedule) {
   study_burst_summary <- days_completed %>%
     mutate(study_burst_start_date = as.character(study_burst_start_date),
            study_burst_end_date = as.character(study_burst_end_date),
-           guid_prefix = str_extract(guid, "^.{3}")) %>%
+           guid_prefix = str_extract(
+              guid, glue::glue("^.{{{guid_prefix_length}}}"))) %>%
     arrange(guid, study_burst) %>%
     select(guid, guid_prefix, study_burst, study_burst_start_date,
            study_burst_end_date, days_completed, study_burst_successful)
@@ -146,7 +148,8 @@ main <- function() {
   synapser::synLogin(Sys.getenv("synapseUsername"), Sys.getenv("synapsePassword"))
   mpower <- fetch_mpower(HEALTH_DATA_SUMMARY_TABLE)
   study_burst_schedule <- build_study_burst_schedule(mpower, TABLE_OUTPUT)
-  study_burst_summary <- build_study_burst_summary(mpower, study_burst_schedule)
+  study_burst_summary <- build_study_burst_summary(
+      mpower, study_burst_schedule, GUID_PREFIX_LENGTH)
   store_to_synapse(study_burst_summary, TABLE_OUTPUT)
 }
 
