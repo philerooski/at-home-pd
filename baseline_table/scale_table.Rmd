@@ -1,0 +1,247 @@
+---
+title: "Disease Measures"
+author: "Phil Snyder"
+date: "2/10/2020"
+output: html_document
+description: This document plots UPDRS, Hoehn and Yahr, PDQ-8, CGI-severity, PGI-severity, MOCA total score, schwab and england
+---
+
+```{r include=FALSE}
+library(synapser)
+library(tidyverse)
+library(kableExtra)
+library(glue)
+synLogin(silent=TRUE) 
+
+BACKGROUND_TABLE <- "syn17008627"
+CLINICAL_TABLE <- "syn17051543"
+MOCA_TOTAL_COLUMN <- "moca_total"
+HOEHN_AND_YAHR_COLUMN <- "hoehnyahrstagescor"
+CGI_SEVERITY_COLUMN <- "severity_thistime"
+PGI_SEVERITY_COLUMN <- "pgi_ill"
+S_AND_W_COLUMN <- "tscaleschengdallivscl"
+PDQ8_COLUMNS <- list("public", "dress", "depressed", "relationships",
+                     "concentration", "communicate", "cramps", "embarrassed")
+```
+
+```{r include=FALSE}
+read_clinical <- function() {
+  clinical_f <- synGet(CLINICAL_TABLE)
+  clinical <- read_csv(clinical_f$path) %>% 
+    filter(!startsWith(guid, "TEST"),
+           (startsWith(redcap_event_name, "Baseline") ||
+            startsWith(redcap_event_name, "Screening")))
+  valid_guids <- clinical %>% 
+    filter(viscompltyn == "Yes",
+           startsWith(redcap_event_name, "Baseline")) %>% 
+    distinct(guid)
+  clinical <- clinical %>% 
+    inner_join(valid_guids)
+  return(clinical)
+}
+
+clinical <- read_clinical()
+```
+
+```{r include=FALSE}
+# Baseline Table using Rochester clinical data
+build_clinical_scales_table <- function(clinical) {
+  day_consented <- clinical %>% 
+    filter(!is.na(demo_dttm)) %>% 
+    arrange(demo_dttm) %>%
+    distinct(guid, .keep_all = TRUE) %>% 
+    mutate(demo_dttm = lubridate::as_date(demo_dttm)) %>% 
+    select(guid, demo_dttm)
+  age <- clinical %>%
+    filter(!is.na(dob)) %>%
+    select(guid, dob) %>%   
+    inner_join(day_consented, by = "guid") %>% 
+    mutate(age = as.integer(lubridate::time_length(demo_dttm - dob, "years"))) %>% 
+    select(guid, age)
+  sex <- clinical %>%
+    filter(!is.na(gendertyppdbp)) %>% 
+    arrange(desc(demo_dttm)) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    select(guid, gendertyppdbp)
+  basics <- age %>% 
+    inner_join(sex)
+}
+
+#clinical_baseline_table <- build_clinical_baseline_table(clinical)
+```
+```{r echo=FALSE}
+plot_moca <- function(clinical) {
+  clinical %>%  
+    filter(!is.na(moca_total)) %>% 
+    mutate(moca_total = as.character(moca_total)) %>% 
+    arrange(moca_dttm) %>% 
+    distinct(guid, .keep_all = TRUE) %>% 
+    ggplot(aes(moca_total)) +
+    geom_bar(stat = "count") +
+    labs(title = "MOCA Total Score", x = "MOCA", y = "") +
+    theme_light()
+}
+
+plot_moca(clinical)
+ggsave("moca.png")
+```
+
+```{r echo=FALSE}
+plot_hoehn_and_yahr <- function(clinical) {
+  clinical %>% 
+    filter(!is.na(hoehnyahrstagescor)) %>% 
+    arrange(mdsupdrs_dttm) %>% 
+    distinct(guid, .keep_all = TRUE) %>% 
+    mutate(hoehnyahrstagescor = str_sub(hoehnyahrstagescor, 1, 1),
+           hoehnyahrstagescor = factor(hoehnyahrstagescor, levels = c("1", "2", "3", "4", "5"))) %>% 
+    ggplot(aes(hoehnyahrstagescor)) +
+    geom_bar(stat = "count") +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Hoehn & Yahr", x = "H&Y", y = "") +
+    theme_light()
+}
+
+plot_hoehn_and_yahr(clinical)
+ggsave("hoehn_and_yahr.png")
+```
+
+```{r, echo=FALSE}
+plot_cgi_severity <- function(clinical) {
+  clinical %>% 
+    filter(!is.na(cgi_dttm)) %>% 
+    arrange(cgi_dttm) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    mutate(severity_thistime = str_sub(severity_thistime, 1, 1),
+           severity_thistime = factor(severity_thistime, levels = c("0", "1", "2", "3", "4", "5", "6", "7"))) %>% 
+    ggplot(aes(severity_thistime)) +
+    geom_bar(stat = "count") +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Clinical Global Impression", x = "CGI Severity", y = "") +
+    theme_light()
+}
+
+plot_cgi_severity(clinical)
+ggsave("cgi.png")
+```
+```{r, echo=FALSE}
+plot_pgi_severity <- function(clinical) {
+  # this survey is only taken once (prebaseline_survey)
+  # no need to drop any 'year 1' rows
+  encoding <- list(
+    "Normal, not at all ill" = "0",
+    "Borderline ill" = "1",
+    "Mildly ill" = "2",
+    "Moderately ill" = "3",
+    "Markedly ill" = "4",
+    "Severely ill" = "5",
+    "Among the most extremely ill" = "6")
+  clinical %>% 
+    filter(!is.na(pgi_ill)) %>% 
+    mutate(pgi_ill = recode(pgi_ill, !!!encoding),
+           pgi_ill = factor(pgi_ill, levels = c("0", "1", "2", "3", "4", "5", "6"))) %>% 
+    ggplot(aes(pgi_ill)) +
+    geom_bar(stat = "count") +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Patient Global Impression", x = "PGI Severity", y = "") +
+    theme_light()
+}
+
+plot_pgi_severity(clinical)
+ggsave("pgi.png")
+```
+
+```{r, echo=FALSE}
+plot_schwab_and_england <- function(clinical) {
+  clinical %>% 
+    filter(!is.na(tscaleschengdallivscl)) %>% 
+    mutate(tscaleschengdallivscl = str_extract(tscaleschengdallivscl, "\\d+%"),
+           tscaleschengdallivscl = factor(tscaleschengdallivscl,
+                                          levels = c("0%", "10%", "20%", "30%", "40%",
+                                                     "50%", "60%", "70%", "80%", "90%", "100%"))) %>% 
+    ggplot(aes(tscaleschengdallivscl)) +
+    geom_bar(stat = "count") +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Modified Schwab & England", x = "Percentage of Independence", y = "") +
+    theme_light()
+}
+
+plot_schwab_and_england(clinical)
+ggsave("schwab_and_england.png")
+```
+
+```{r include=FALSE}
+# Apparently only SUPER-PD participants are administered this survey
+plot_pdq8 <- function(clinical) {
+  # `leisure` is the first question of the PDQ-39
+  clinical %>%
+    filter(!is.na(leisure)) %>% 
+    select_at("guid", PDQ8_COLUMNS) 
+  
+}
+```
+
+```{r}
+mean_and_sd <- function(clinical) {
+  moca_scores <- clinical %>% 
+    filter(!is.na(moca_total)) %>% 
+    summarize(metric = "MOCA",
+              mean_and_sd = glue("{format(mean(moca_total), digits = 3)}",
+                                 " ",
+                                 "({format(sqrt(var(moca_total)), digits = 2)})"))
+  h_and_y_scores <- clinical %>% 
+    filter(!is.na(hoehnyahrstagescor)) %>% 
+    arrange(mdsupdrs_dttm) %>% 
+    distinct(guid, .keep_all = TRUE) %>% 
+    mutate(hoehnyahrstagescor = as.integer(str_sub(hoehnyahrstagescor, 1, 1))) %>% 
+    summarize(metric = "Hoehn & Yahr",
+              mean_and_sd = glue("{format(mean(hoehnyahrstagescor), digits = 3)}",
+                                 " ",
+                                 "({format(sqrt(var(hoehnyahrstagescor)), digits = 2)})"))
+  cgi_scores <- clinical %>% 
+    filter(!is.na(cgi_dttm)) %>% 
+    arrange(cgi_dttm) %>% 
+    distinct(guid, .keep_all = T) %>% 
+    mutate(severity_thistime = as.integer(str_sub(severity_thistime, 1, 1))) %>% 
+    summarize(metric = "Clinical Global Impression",
+              mean_and_sd = glue("{format(mean(severity_thistime), digits = 3)}",
+                                 " ",
+                                 "({format(sqrt(var(severity_thistime)), digits = 2)})"))
+  pgi_encoding <- list(
+    "Normal, not at all ill" = 0,
+    "Borderline ill" = 1,
+    "Mildly ill" = 2,
+    "Moderately ill" = 3,
+    "Markedly ill" = 4,
+    "Severely ill" = 5,
+    "Among the most extremely ill" = 6)
+  pgi_scores <- clinical %>% 
+    filter(!is.na(pgi_ill)) %>% 
+    mutate(pgi_ill = recode(pgi_ill, !!!pgi_encoding)) %>% 
+    summarize(metric = "Patient Global Impression",
+              mean_and_sd = glue("{format(mean(pgi_ill), digits = 3)}",
+                                 " ",
+                                 "({format(sqrt(var(pgi_ill)), digits = 2)})"))
+  schwab_and_england_scores <- clinical %>% 
+    filter(!is.na(tscaleschengdallivscl)) %>% 
+    mutate(tscaleschengdallivscl = as.integer(str_extract(tscaleschengdallivscl, "\\d+"))) %>%
+    summarize(metric = "Schwab and England",
+              mean_and_sd = glue("{format(mean(tscaleschengdallivscl), digits = 3)}%",
+                                 " ",
+                                 "({format(sqrt(var(tscaleschengdallivscl)), digits = 2)}%)"))
+  # smartphone active task counts
+  health_data_summary <- as_tibble(synTableQuery("select * from syn17015960")$asDataFrame())
+  active_tasks <- c("Tapping", "Walk", "Tremor")
+  smartphone_active_task_summary <- health_data_summary %>% 
+    filter(startsWith(originalTable, active_tasks)) %>% 
+    group_by(externalId) %>% 
+    summarize(tasks = n()) %>% 
+    summarize(metric = "Smartphone Active Tasks",
+              mean_and_sd = glue("{format(mean(tasks), digits = 3)}",
+                                 " ",
+                                 "({format(sqrt(var(tasks)), digits = 2)})"))
+  mean_and_sd <- bind_rows(moca_scores, h_and_y_scores, cgi_scores,
+                           pgi_scores, schwab_and_england_scores,
+                           smartphone_active_task_summary)
+}
+```
+
