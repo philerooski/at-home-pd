@@ -7,13 +7,14 @@ library(tidyverse)
 library(tidyr)
 library(data.table)
 library(synapser)
-source("compute_updrs_score/scoring_utils.R")
+source("scoring_utils.R")
 synLogin()
 
 #' Synapse reference
 CLINICAL_DATA_SYN_ID <- "syn18565500"
 EXCEL_LOOKUP_SYN_ID <- "syn25050918"
 SYNAPSE_PARENT_ID <- "syn16809549"
+SUPER_PARENT_ID <- "syn25715411"
 OUTPUT_FILENAME <- "computed_ahpd_updrs_scores.tsv"
 DMR_FIELD_MAPPING <- "syn25056102"
 
@@ -37,22 +38,54 @@ get_ahpd_clinical_data <- function(){
     clinical_records <- fread(synGet(CLINICAL_DATA_SYN_ID)$path) %>%
         tibble::as_tibble(.)
     visit_info <- clinical_records %>%
-        dplyr::filter(guid != "TESTING",
-                      redcap_event_name == "baseline_arm_1") %>%
-        dplyr::select(c("guid":"redcap_repeat_instance"),
+        dplyr::filter(!stringr::str_detect(guid, "TEST"),
+                      redcap_event_name %in% c(
+                          "baseline_arm_1", "month_12_arm_1", "month_24_arm_1"),
+                      redcap_repeat_instrument != "reportable_event") %>%
+        dplyr::mutate(visit = case_when(
+                          redcap_event_name == "baseline_arm_1" ~ "Baseline",
+                          redcap_event_name == "month_12_arm_1" ~ "Month 12",
+                          redcap_event_name == "month_24_arm_1" ~ "Month 24")) %>%
+        dplyr::select(guid,
+                      redcap_event_name,
+                      visit,
                       visstatdttm,
                       viscompltyn,
                       c("mdsupdrs_dttm":"painfloffstatdystn"),
                       matches("neck|postinst_instr"))
     score_info <- clinical_records %>%
-        dplyr::filter(guid != "TESTING",
-                      redcap_event_name == "baseline_pre_visit_arm_1") %>%
-        dplyr::select(c("guid"),
-                      c("qstnnreinfoprovdrt":"mdsupdrsfreezingscore"))
+        dplyr::filter(!stringr::str_detect(guid, "TEST"),
+                      redcap_event_name %in% c(
+                          "baseline_pre_visit_arm_1",
+                          "month_12_pre_visit_arm_1",
+                          "month_24_pre_visit_arm_1")) %>%
+        dplyr::mutate(visit = case_when(
+                          redcap_event_name == "baseline_pre_visit_arm_1" ~ "Baseline",
+                          redcap_event_name == "month_12_pre_visit_arm_1" ~ "Month 12",
+                          redcap_event_name == "month_24_pre_visit_arm_1" ~ "Month 24")) %>%
+        dplyr::select(guid,
+                      visit,
+                      qstnnreinfoprovdrt:mdsupdrsfreezingscore,
+                      qstnnreinfoprovdrt_m12:mdsupdrsfreezingscore_m12) %>%
+        pivot_longer(!guid:visit) %>%
+        drop_na(value) %>%
+        mutate(name = if_else(
+            str_detect(name, "_m12"),
+            str_remove(name, "_m12"),
+            name),
+               name = if_else(
+            name %in% c("sleepprobscore", "daytmsleepscore",
+                        "painothrsensscore", "urnryprobscore",
+                        "constipprobscore", "slivadroolscore",
+                        "chwngswllwngscore", "eatingtskscore",
+                        "handwritingscore", "gttngoutbedscore",
+                        "wlkngbalancescore"),
+            stringr::str_c("mdsupdrs", name),
+            name)) %>%
+        pivot_wider(guid:visit)
     scores <- visit_info %>%
-        dplyr::left_join(score_info, by = c("guid")) %>%
-        dplyr::filter(is.na(redcap_repeat_instance)) %>%
-        dplyr::select(createdOn = mdsupdrs_dttm, everything()) %>%
+        dplyr::inner_join(score_info, by = c("guid", "visit")) %>%
+        dplyr::select(createdOn = visstatdttm, everything()) %>%
         tibble::as_tibble(.)
     return(scores)
 }
@@ -113,13 +146,28 @@ main <- function(){
     field_mapping <- readr::read_csv(synapser::synGet(DMR_FIELD_MAPPING)$path)
     #' compute updrs score and write to .tsv
     super_physician_on <- get_super_physician_scores(field_mapping, "Physician_ON")
-    store_to_synapse(super_physician_on, "mdsupdrs_physician_on_med_scores.csv", "syn18691015")
+    store_to_synapse(df = super_physician_on,
+                     fname = "mdsupdrs_physician_on_med_scores.csv",
+                     parent = SUPER_PARENT_ID)
     super_physician_off <- get_super_physician_scores(field_mapping, "Physician_OFF")
-    store_to_synapse(super_physician_off, "mdsupdrs_physician_off_med_scores.csv", "syn18691015")
+    store_to_synapse(df = super_physician_off,
+                     fname = "mdsupdrs_physician_off_med_scores.csv",
+                     parent = SUPER_PARENT_ID)
     ahpd_updrs_scores <- get_ahpd_clinical_data() %>%
+        select(
+          -mdsupdrsttlhrawkdysknum,
+          -mdsupdrsttlhrdysknum,
+          -mdsupdrsprcntdyskval,
+          -ttlhrawkoffstatenu,
+          -ttlhroffdemndystni,
+          -ttlhroffwdystnianu,
+          -prcntoffdystniaval,
+          -mdsupdrsttlhroffnum,
+          -mdsupdrsprcntoffval) %>%
         map_column_names("ahpd") %>%
         run_updrs_scoring(
-            join_cols = c("guid", "createdOn", "C_ONLDOPA")) %>%
+            join_cols = c("guid", "visit", "createdOn")) %>%
+        distinct(guid, visit, createdOn, .keep_all=TRUE) %>%
         write.table(OUTPUT_FILENAME, sep = "\t", row.names=F, quote=F)
     #' store result to synapse
     f <- File(OUTPUT_FILENAME, SYNAPSE_PARENT_ID)
@@ -130,5 +178,6 @@ main <- function(){
         executed = GIT_URL))
     unlink(OUTPUT_FILENAME)
 }
+
 main()
 
