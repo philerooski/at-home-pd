@@ -87,11 +87,6 @@ get_updrs_score_reference <- function(){
 #' (UPDRS1, UPDRS2, UPDRS3, UPDRS3R, UPDRSTOT, UPDRSAMBL, UPDRSAMR, MAX_PKTR, MAX_RTTR)
 get_updrs_mapping <- function(updrs_metric = NULL){
     mapping <- readxl::read_excel(synGet(EXCEL_LOOKUP_SYN_ID)$path) %>%
-        dplyr::filter(`Form Name` %in%
-                          c("mdsupdrs",
-                            "prebaseline_survey",
-                            !is.na(`CTCC Name`)) |
-                          str_detect(`Variable / Field Name`, "neck|postinst_instr")) %>%
         dplyr::select(ahpd = `Variable / Field Name`,
                       ctcc_code = `CTCC Name`,
                       mpower = `Section Header`) %>%
@@ -124,6 +119,7 @@ map_column_names <- function(data, data_opts){
     }
     updrs_cols_lookup <- get_updrs_mapping() %>%
         dplyr::select(all_of(data_opts), ctcc_code) %>%
+        dplyr::filter(ahpd != "mdsupdrs_dttm") %>%
         tidyr::drop_na()
     data <- tryCatch({
         data %>%
@@ -236,10 +232,8 @@ compute_updrs_combined_score <- function(data){
 #' @param data: dataset where you want to run the scoring
 #' @param join_cols: columns to keep or that will be used for joining
 run_updrs_scoring <- function(data, join_cols){
-    list(total = data %>%
-             compute_updrs_total_scores(join_cols),
-         max = data %>%
-             compute_updrs_max_scores(join_cols)) %>%
+    list(total = compute_updrs_total_scores(data, join_cols),
+         max = compute_updrs_max_scores(data, join_cols)) %>%
         purrr::reduce(dplyr::full_join) %>%
         compute_updrs_combined_score() %>%
         dplyr::relocate(all_of(SCORES), .after = last_col())
