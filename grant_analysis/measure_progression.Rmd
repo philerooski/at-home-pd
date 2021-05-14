@@ -1,0 +1,222 @@
+---
+title: "Disease Measures"
+author: "Phil Snyder"
+output: html_document
+description: This document plots UPDRS, Hoehn and Yahr, and Schwab and England change over time
+---
+
+```{r include=FALSE}
+library(synapser)
+library(tidyverse)
+library(kableExtra)
+library(glue)
+synLogin(silent=TRUE) 
+
+BACKGROUND_TABLE <- "syn17008627"
+CLINICAL_TABLE <- "syn17051543"
+MOCA_TOTAL_COLUMN <- "moca_total"
+HOEHN_AND_YAHR_COLUMN <- "hoehnyahrstagescor"
+CGI_SEVERITY_COLUMN <- "severity_thistime"
+PGI_SEVERITY_COLUMN <- "pgi_ill"
+S_AND_W_COLUMN <- "tscaleschengdallivscl"
+PDQ8_COLUMNS <- list("public", "dress", "depressed", "relationships",
+                     "concentration", "communicate", "cramps", "embarrassed")
+MDS_UPDRS_SCORES <- "syn25050919"
+```
+
+```{r include=FALSE}
+read_clinical <- function() {
+  clinical_f <- synGet(CLINICAL_TABLE)
+  clinical <- read_csv(clinical_f$path) %>% 
+    filter(!startsWith(guid, "TEST"),
+           (startsWith(redcap_event_name, "Baseline") ||
+            startsWith(redcap_event_name, "Screening")))
+  valid_guids <- clinical %>% 
+    filter(viscompltyn == "Yes",
+           str_detect(redcap_event_name, "Arm 1")) %>% 
+    distinct(guid)
+  clinical <- clinical %>% 
+    inner_join(valid_guids) %>% 
+    mutate(
+      visit = NA_character_,
+      visit = if_else(str_detect(redcap_event_name, "Baseline"), "Baseline", visit),
+      visit = if_else(str_detect(redcap_event_name, "Month 12"), "Month 12", visit),
+      visit = if_else(str_detect(redcap_event_name, "Month 24"), "Month 24", visit)) %>% 
+    filter(!is.na(visit),
+           is.na(redcap_repeat_instrument))
+  return(clinical)
+}
+
+clinical <- read_clinical()
+```
+
+# Distribution of PROs across visits
+## MDS-UPDRS
+```{r echo=FALSE}
+plot_mds_updrs_across_time <- function() {
+  mds_updrs_scores_f <- synGet(MDS_UPDRS_SCORES)
+  mds_updrs_scores <- suppressMessages(read_tsv(mds_updrs_scores_f$path))
+  mds_updrs_scores %>%
+    ggplot(aes(visit, UPDRSTOT)) +
+    geom_boxplot() +
+    labs(title = "MDS-UPDRS", x = "Visit", y = "MDS-UPDRS Total Score") +
+    theme_light()
+}
+
+plot_mds_updrs_across_time()
+```
+
+```{r echo=FALSE}
+plot_mds_updrs_across_time_2 <- function() {
+  mds_updrs_scores_f <- synGet(MDS_UPDRS_SCORES)
+  mds_updrs_scores <- suppressMessages(read_tsv(mds_updrs_scores_f$path))
+  mds_updrs_scores %>%
+    select(guid, visit, UPDRSTOT) %>% 
+    filter(!is.na(UPDRSTOT)) %>% 
+    pivot_wider(names_from = visit, values_from = UPDRSTOT) %>% 
+    mutate(month_12_increase = `Month 12` - `Baseline`,
+           month_24_increase = `Month 24` - `Baseline`) %>% 
+    select(guid, month_12_increase, month_24_increase) %>% 
+    pivot_longer(month_12_increase:month_24_increase, names_to = "visit") %>% 
+    mutate(visit = case_when(
+      visit == "month_12_increase" ~ "Month 12",
+      visit == "month_24_increase" ~ "Month 24")) %>% 
+    ggplot(aes(visit, value)) +
+    geom_boxplot() +
+    labs(title = "Change in MDS-UPDRS Total Score relative to baseline", x = "Visit", y = "") +
+    theme_light()
+}
+
+plot_mds_updrs_across_time_2()
+```
+
+## Hoehn and Yahr
+```{r echo=FALSE}
+plot_hoehn_yahr_across_time <- function(clinical) {
+  all_possible_visits <- clinical %>% 
+    distinct(guid) %>% 
+    crossing(tibble(visit = c("Baseline", "Month 12", "Month 24")))
+  h_and_y_data <- clinical %>% 
+    filter(!is.na(hoehnyahrstagescor)) %>% 
+    mutate(h_and_y = as.integer(str_sub(hoehnyahrstagescor, end=1L))) %>% 
+    select(guid, visit, h_and_y)
+  h_and_y_data <- all_possible_visits %>% 
+    left_join(h_and_y_data) %>% 
+    suppressMessages()
+  h_and_y_data %>% 
+    ggplot(aes(h_and_y)) +
+    geom_bar(stat = "count") +
+    facet_grid(rows = vars(visit)) +
+    labs(title = "Hoehn and Yahr", x = "score", y = "") +
+    theme_light()
+}
+
+plot_hoehn_yahr_across_time(clinical)
+```
+
+```{r echo=FALSE}
+plot_hoehn_yahr_across_time_2 <- function(clinical) {
+  # TODO: plot change in distribution from baseline, faceted by visit
+  clinical %>% 
+    filter(!is.na(hoehnyahrstagescor)) %>% 
+    mutate(h_and_y = as.integer(str_sub(hoehnyahrstagescor, end=1L))) %>% 
+    select(guid, visit, h_and_y) %>% 
+    pivot_wider(names_from = visit, values_from = h_and_y) %>% 
+    mutate(month_12_increase = `Month 12` - `Baseline`,
+           month_24_increase = `Month 24` - `Baseline`) %>% 
+    select(guid, month_12_increase, month_24_increase) %>% 
+    pivot_longer(month_12_increase:month_24_increase, names_to = "visit") %>% 
+    mutate(visit = case_when(
+      visit == "month_12_increase" ~ "Month 12",
+      visit == "month_24_increase" ~ "Month 24"),
+      value = case_when(
+        value > 0 ~ "Increase",
+        value == 0 ~ "No change",
+        value < 0 ~ "Decrease"),
+      value = factor(value, levels = c("Decrease", "No change", "Increase"))) %>% 
+    ggplot(aes(value)) +
+    geom_bar(stat = "count") +
+    facet_grid(rows = vars(visit)) +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Hoehn and Yahr",
+         x = "Change in H&Y relative to baseline",
+         y = "") +
+    theme_light()
+}
+
+plot_hoehn_yahr_across_time_2(clinical)
+```
+
+## Schwab and England
+```{r, echo=FALSE}
+plot_schwab_and_england <- function(clinical) {
+  all_possible_visits <- clinical %>% 
+    distinct(guid) %>% 
+    crossing(tibble(visit = c("Baseline", "Month 12", "Month 24")))
+  s_and_e_data <- clinical %>% 
+    filter(!is.na(tscaleschengdallivscl)) %>% 
+    mutate(tscaleschengdallivscl = str_extract(tscaleschengdallivscl, "\\d+%"),
+           tscaleschengdallivscl = factor(tscaleschengdallivscl,
+                                          levels = c("50%", "60%", "70%", "80%", "90%", "100%")))
+  s_and_e_data <- all_possible_visits %>% 
+    left_join(s_and_e_data) %>% 
+    suppressMessages()
+  s_and_e_data %>% 
+    ggplot(aes(tscaleschengdallivscl)) +
+    geom_bar(stat = "count") +
+    facet_grid(rows = vars(visit)) +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Modified Schwab & England", x = "Percentage of Independence", y = "") +
+    theme_light()
+}
+
+plot_schwab_and_england(clinical)
+```
+
+```{r, echo=FALSE}
+plot_schwab_and_england_2 <- function(clinical) {
+  all_possible_visits <- clinical %>% 
+    distinct(guid) %>% 
+    crossing(tibble(visit = c("Baseline", "Month 12", "Month 24")))
+  s_and_e_data <- clinical %>% 
+    filter(!is.na(tscaleschengdallivscl)) %>% 
+    mutate(tscaleschengdallivscl = str_extract(tscaleschengdallivscl, "\\d+%"),
+           s_and_w = as.numeric(str_extract(tscaleschengdallivscl, "\\d+")),
+           tscaleschengdallivscl = factor(tscaleschengdallivscl,
+                                          levels = c("50%", "60%", "70%", "80%", "90%", "100%"))) %>% 
+    select(guid, visit, s_and_w)
+  s_and_e_data <- all_possible_visits %>% 
+    left_join(s_and_e_data) %>% 
+    suppressMessages()
+  s_and_e_data %>% 
+    pivot_wider(names_from = visit, values_from = s_and_w) %>% 
+    mutate(
+      month_12_change = case_when(
+        `Month 12` > `Baseline` ~ "Increase",
+        `Month 12` == `Baseline` ~ "No change",
+        `Month 12` < `Baseline` ~ "Decrease",
+    ),
+      month_24_change = case_when(
+        `Month 24` > `Baseline` ~ "Increase",
+        `Month 24` == `Baseline` ~ "No change",
+        `Month 24` < `Baseline` ~ "Decrease",
+      )) %>% 
+    select(guid, month_12_change, month_24_change) %>% 
+    pivot_longer(month_12_change:month_24_change, names_to = "visit") %>% 
+    mutate(visit = case_when(
+      visit == "month_12_change" ~ "Month 12",
+      visit == "month_24_change" ~ "Month 24"),
+      value = factor(value, levels = c("Decrease", "No change", "Increase"))) %>% 
+    ggplot(aes(value)) +
+    geom_bar(stat = "count") +
+    facet_grid(rows = vars(visit)) +
+    scale_x_discrete(drop = FALSE) +
+    labs(title = "Modified Schwab & England",
+         x = "Change in independence relative to baseline",
+         y = "") +
+    theme_light()
+}
+
+plot_schwab_and_england_2(clinical)
+```
+
