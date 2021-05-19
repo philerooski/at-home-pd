@@ -1,0 +1,589 @@
+---
+title: "mPower Feature Association"
+author: "Phil Snyder"
+output: html_document
+description: This document plots UPDRS, Hoehn and Yahr, PDQ-8, CGI-severity, PGI-severity, MOCA total score, schwab and england
+---
+
+```{r include=FALSE}
+library(synapser)
+library(tidyverse)
+library(kableExtra)
+library(glue)
+synLogin(silent=TRUE) 
+
+BACKGROUND_TABLE <- "syn17008627"
+CLINICAL_TABLE <- "syn17051543"
+MOCA_TOTAL_COLUMN <- "moca_total"
+HOEHN_AND_YAHR_COLUMN <- "hoehnyahrstagescor"
+CGI_SEVERITY_COLUMN <- "severity_thistime"
+PGI_SEVERITY_COLUMN <- "pgi_ill"
+S_AND_W_COLUMN <- "tscaleschengdallivscl"
+PDQ8_COLUMNS <- list("public", "dress", "depressed", "relationships",
+                     "concentration", "communicate", "cramps", "embarrassed")
+MDS_UPDRS_SCORES <- "syn25050919"
+HEALTH_DATA_SUMMARY_TABLE <- "syn17015960"
+```
+
+```{r include=FALSE}
+TAPPING_AGG_FEATURES <- "syn25705827"
+ROTATION_AGG_FEATURES <- "syn25705739"
+WALK_AGG_FEATURES <- "syn25705738"
+TREMOR_AGG_FEATURES <- "syn25709601"
+```
+
+```{r include=FALSE}
+read_syn_tsv <- function(synapse_id) {
+ f <- synGet(synapse_id)
+ df <- suppressMessages(read_tsv(f$path))
+ return(as_tibble(df))
+}
+
+tapping_features <- read_syn_tsv(TAPPING_AGG_FEATURES)
+rotation_features <- read_syn_tsv(ROTATION_AGG_FEATURES)
+walk_features <- read_syn_tsv(WALK_AGG_FEATURES)
+tremor_features <- read_syn_tsv(TREMOR_AGG_FEATURES)
+```
+
+```{r include=FALSE}
+read_clinical <- function() {
+  clinical_f <- synGet(CLINICAL_TABLE)
+  clinical <- read_csv(clinical_f$path) %>% 
+    filter(!startsWith(guid, "TEST"),
+           redcap_event_name == "Baseline (Arm 1: Arm 1)")
+  valid_guids <- clinical %>% 
+    filter(viscompltyn == "Yes") %>% 
+    distinct(guid)
+  clinical <- clinical %>% 
+    inner_join(valid_guids)
+  return(clinical)
+}
+
+clinical <- read_clinical()
+```
+
+```{r include=FALSE}
+get_healthcode_guid_mapping <- function() {
+  hdst <- synTableQuery(glue::glue("select * from {HEALTH_DATA_SUMMARY_TABLE}"))
+  hdst <- hdst$asDataFrame() %>% 
+    as_tibble() %>% 
+    filter(!is.na(externalId)) %>% 
+    distinct(healthCode, externalId) %>% 
+    rename(guid = externalId)
+  return(hdst)
+}
+
+healthcode_map <- get_healthcode_guid_mapping()
+```
+
+```{r include=FALSE}
+get_mdsupdrs_scores <- function(healthcode_map) {
+  mds_updrs_scores_f <- synGet(MDS_UPDRS_SCORES)
+  mds_updrs_scores <- suppressMessages(read_tsv(mds_updrs_scores_f$path)) %>% 
+    filter(visit == "Baseline") %>% 
+    inner_join(healthcode_map)
+  return(mds_updrs_scores)
+}
+
+get_hoehn_and_yahr <- function(clinical, healthcode_map) {
+  h_and_y_data <- clinical %>% 
+    filter(!is.na(hoehnyahrstagescor)) %>% 
+    mutate(h_and_y = as.integer(str_sub(hoehnyahrstagescor, end=1L))) %>% 
+    inner_join(healthcode_map) %>% 
+    select(guid, healthCode, h_and_y)
+  return(h_and_y_data)
+}
+
+get_schwab_and_england <- function(clinical, healthcode_map) {
+  s_and_e_data <- clinical %>% 
+    filter(!is.na(tscaleschengdallivscl)) %>% 
+    mutate(tscaleschengdallivscl = str_extract(tscaleschengdallivscl, "\\d+%"),
+           tscaleschengdallivscl = factor(tscaleschengdallivscl,
+                                          levels = c("50%", "60%", "70%", "80%", "90%", "100%")),
+           s_and_e_numeric = as.numeric(str_extract(tscaleschengdallivscl, "\\d+"))) %>% 
+    inner_join(healthcode_map) %>% 
+    rename(s_and_e = tscaleschengdallivscl) %>% 
+    select(guid, healthCode, s_and_e, s_and_e_numeric)
+  return(s_and_e_data)
+}
+
+mdsupdrs <- get_mdsupdrs_scores(healthcode_map)
+h_and_y <- get_hoehn_and_yahr(clinical, healthcode_map)
+s_and_e <- get_schwab_and_england(clinical, healthcode_map)
+```
+
+## Feature distribution
+### Tapping
+Participant count: `r n_distinct(tapping_features$healthCode)`
+
+If the `numberTaps_md` field is NA for either right or left hands, then the participant will be assigned a slow hand of `NA`. 
+
+```{r echo=FALSE}
+get_slower_hand <- function(tapping_features) {
+  tapping_features %>% 
+    select(healthCode, hand, numberTaps_md) %>% 
+    filter(!is.na(hand)) %>% 
+    pivot_wider(names_from = hand, values_from = numberTaps_md) %>% 
+    mutate(slow_hand = case_when(
+      left < right ~ "left",
+      right <= left ~ "right")) %>% 
+    distinct(healthCode, slow_hand)
+}
+
+plot_slow_hand_dist <- function(slow_hand) {
+  slow_hand %>% 
+    ggplot(aes(slow_hand)) +
+    geom_bar() +
+    labs(title = "Slow hand distribution", x = "Hand", y = "Count")
+}
+
+slow_hand <- get_slower_hand(tapping_features)
+plot_slow_hand_dist(slow_hand)
+```
+
+```{r include=FALSE}
+tap_anomalies <- tapping_features %>% 
+  filter(medianTapInter_md > 1) %>% 
+  nrow()
+```
+
+`r tap_anomalies` Participants had an unreasonably high (> 1) aggregate value for `medianTapInter_md`. These participants are assumed to be errors and are not shown in the following plot.
+
+```{r echo=FALSE}
+plot_tapping_dist <- function(tapping_features, slow_hand) {
+  tapping_features %>% 
+    inner_join(slow_hand, by = c("healthCode", "hand" = "slow_hand")) %>% 
+    ggplot(aes(medianTapInter_md)) +
+    geom_density() +
+    xlim(0, 1) +
+    labs(title = "Median Tap Interval of slow hand (median)", x = "Median Tap Interval (median)", y = "Density")
+}
+
+plot_tapping_dist(tapping_features, slow_hand)
+```
+
+### Walking
+Participant count: `r n_distinct(walk_features$healthCode)`
+
+```{r echo=FALSE}
+plot_walking_dist <- function(walk_features) {
+  walk_features %>% 
+    ggplot(aes(AA_stride_duration_md)) +
+    geom_density() +
+    labs(title = "Stride Duration (median)", x = "AA_stride_duration_md", y = "Density")
+}
+
+plot_walking_dist(walk_features)
+```
+
+
+### Rotation
+Participant count: `r n_distinct(rotation_features$healthCode)`
+
+```{r echo=FALSE}
+plot_rotation_dist <- function(rotation_features) {
+  rotation_features %>% 
+    ggplot(aes(rotation_omega_md)) +
+    geom_density() +
+    labs(title = "Rotation Omega (median)", x = "rotation_omega_md", y = "Density")
+}
+
+plot_rotation_dist(rotation_features)
+```
+
+### Tremor
+Participant count: `r n_distinct(tremor_features$healthCode)`
+
+```{r echo=FALSE}
+plot_tremor_energy_dist <- function(tremor_features) {
+  tremor_features %>% 
+    ggplot(aes(energy.tm_md)) +
+    geom_density() +
+    labs(title = "Total Energy (median)", x = "energy.tm_md", y = "Density")
+}
+
+plot_tremor_energy_dist(tremor_features)
+```
+
+
+```{r echo=FALSE}
+plot_tremor_expectation_dist <- function(tremor_features) {
+  tremor_features %>% 
+    ggplot(aes(mean.tm_md)) +
+    geom_density() +
+    labs(title = "Mean signal (median)", x = "mean.tm_md", y = "Density")
+}
+
+plot_tremor_expectation_dist(tremor_features)
+```
+
+## Feature Correlation
+### MDS-UPDRS
+
+`r tap_anomalies` Participants had an unreasonably high (> 1) aggregate value for `medianTapInter_md`. These participants are assumed to be errors and are neither shown in the following plot nor included in the correlation calculations below.
+
+```{r echo=FALSE}
+format_tap_correlation <- function(mdsupdrs, h_and_y, s_and_e,
+                                   tapping_features, slow_hand) {
+  total_mdsupdrs <- mdsupdrs %>%
+    distinct(healthCode, UPDRSTOT)
+  tap_correlation <- total_mdsupdrs %>% 
+    inner_join(tapping_features, by = "healthCode") %>% 
+    inner_join(slow_hand, by = c("healthCode", "hand" = "slow_hand")) %>% 
+    left_join(h_and_y, by = "healthCode") %>% 
+    left_join(s_and_e, by = "healthCode")
+  return(tap_correlation)
+}
+
+plot_mdsupdrs_tap_correlation <- function(tap_correlation) {
+  tap_correlation %>% 
+    ggplot(aes(UPDRSTOT, medianTapInter_md)) +
+    geom_point() +
+    ylim(0, 1) +
+    labs(title = "Total MDS-UPDRS and median tap interval of slow hand")
+}
+
+tap_correlation <- format_tap_correlation(mdsupdrs, h_and_y, s_and_e,
+                                          tapping_features, slow_hand)
+plot_mdsupdrs_tap_correlation(tap_correlation)
+```
+
+```{r include=FALSE}
+tap_clean <- tap_correlation %>% 
+  filter(medianTapInter_md <= 1)
+tap_corr <- cor(tap_clean$UPDRSTOT, tap_clean$medianTapInter_md)
+tap_ccc <- agRee::agree.ccc(matrix(c(tap_clean$UPDRSTOT, tap_clean$medianTapInter_md), ncol=2))
+```
+
+r = `r tap_corr` \
+concordance = `r tap_ccc$value`
+
+```{r echo=FALSE}
+format_walk_correlation <- function(mdsupdrs, h_and_y, s_and_e, walk_features) {
+  total_mdsupdrs <- mdsupdrs %>%
+    distinct(healthCode, UPDRSTOT)
+  walk_correlation <- total_mdsupdrs %>% 
+    left_join(h_and_y, by = "healthCode") %>% 
+    left_join(s_and_e, by = "healthCode") %>% 
+    inner_join(walk_features, by = "healthCode")
+  return(walk_correlation)
+}
+
+plot_mdsupdrs_walk_correlation <- function(walk_correlation) {
+  walk_correlation %>% 
+    ggplot(aes(UPDRSTOT, AA_stride_duration_md)) +
+    geom_point() +
+    labs(title = "Total MDS-UPDRS and stride duration")
+}
+
+walk_correlation <- format_walk_correlation(mdsupdrs, h_and_y, s_and_e, walk_features)
+plot_mdsupdrs_walk_correlation(walk_correlation)
+```
+
+```{r include=FALSE}
+walk_corr <- cor(walk_correlation$UPDRSTOT, walk_correlation$AA_stride_duration_md)
+walk_ccc <- agRee::agree.ccc(matrix(c(walk_correlation$UPDRSTOT, walk_correlation$AA_stride_deviation_md), ncol=2))
+```
+
+r = `r walk_corr` \ 
+concordance = `r walk_ccc$value`
+
+```{r echo=FALSE}
+format_rotation_correlation <- function(mdsupdrs, h_and_y, s_and_e, rotation_features) {
+  total_mdsupdrs <- mdsupdrs %>%
+    distinct(healthCode, UPDRSTOT)
+  rotation_correlation <- total_mdsupdrs %>% 
+    left_join(h_and_y, by = "healthCode") %>% 
+    left_join(s_and_e, by = "healthCode") %>% 
+    inner_join(rotation_features, by = "healthCode") %>% 
+  return(rotation_correlation)
+}
+
+plot_mdsupdrs_rotation_correlation <- function(rotation_correlation) {
+  rotation_correlation %>% 
+    ggplot(aes(UPDRSTOT, rotation_omega_md)) +
+    geom_point() +
+    labs(title = "Total MDS-UPDRS and rotation omega")
+}
+
+rotation_correlation <- format_rotation_correlation(mdsupdrs, h_and_y, s_and_e, rotation_features)
+plot_mdsupdrs_rotation_correlation(rotation_correlation)
+```
+
+```{r include=FALSE}
+rotation_corr <- cor(rotation_correlation$UPDRSTOT, rotation_correlation$rotation_omega_md)
+rotation_ccc <- agRee::agree.ccc(matrix(c(rotation_correlation$UPDRSTOT, rotation_correlation$rotation_omega_md), ncol=2))
+```
+
+r = `r rotation_corr` \
+concordance = `r rotation_ccc$value`
+
+```{r echo=FALSE}
+format_tremor_correlation <- function(mdsupdrs, h_and_y, s_and_e, tremor_features) {
+  total_mdsupdrs <- mdsupdrs %>%
+    distinct(healthCode, UPDRSTOT)
+  tremor_correlation <- total_mdsupdrs %>% 
+    left_join(h_and_y, by = "healthCode") %>% 
+    left_join(s_and_e, by = "healthCode") %>% 
+    inner_join(tremor_features, by = "healthCode") %>% 
+  return(tremor_correlation)
+}
+
+plot_mdsupdrs_energy_correlation <- function(tremor_correlation) {
+  tremor_correlation %>% 
+    ggplot(aes(UPDRSTOT, energy.tm_md)) +
+    geom_point() +
+    labs(title = "Total MDS-UPDRS and tremor energy")
+}
+
+tremor_correlation <- format_tremor_correlation(mdsupdrs, h_and_y, s_and_e, tremor_features)
+plot_mdsupdrs_energy_correlation(tremor_correlation)
+```
+
+```{r include=FALSE}
+energy_corr <- cor(tremor_correlation$UPDRSTOT, tremor_correlation$energy.tm_md, use="complete.obs")
+clean_energy <- tremor_correlation %>% 
+  filter(!is.na(UPDRSTOT), !is.na(energy.tm_md))
+energy_ccc <- agRee::agree.ccc(matrix(c(clean_energy$UPDRSTOT, clean_energy$energy.tm_md), ncol=2))
+```
+
+r = `r energy_corr` \
+concordance = `r energy_ccc$value`
+
+```{r echo=FALSE}
+plot_mdsupdrs_mean_correlation <- function(tremor_correlation) {
+  tremor_correlation %>% 
+    ggplot(aes(UPDRSTOT, mean.tm_md)) +
+    geom_point() +
+    labs(title = "Total MDS-UPDRS and tremor mean")
+}
+
+plot_mdsupdrs_mean_correlation(tremor_correlation)
+```
+```{r include=FALSE}
+mean_corr <- cor(tremor_correlation$UPDRSTOT, tremor_correlation$mean.tm_md, use="complete.obs")
+clean_mean <- tremor_correlation %>% 
+  filter(!is.na(UPDRSTOT), !is.na(mean.tm_md))
+mean_ccc <- agRee::agree.ccc(matrix(c(clean_mean$UPDRSTOT, clean_mean$mean.tm_md), ncol=2))
+```
+
+r = `r mean_corr` \
+concordance = `r mean_ccc$value`
+
+### Hoehn and Yahr
+
+`r tap_anomalies` Participants had an unreasonably high (> 1) aggregate value for `medianTapInter_md`. These participants are assumed to be errors and are neither shown in the following plot nor included in the correlation calculations below.
+
+```{r echo=FALSE}
+plot_h_and_y_tap_correlation <- function(tap_correlation) {
+  tap_correlation %>% 
+    ggplot(aes(h_and_y, medianTapInter_md)) +
+    geom_boxplot(aes(group=h_and_y)) +
+    ylim(0, 1) +
+    labs(title = "Hoehn and Yahr and median tap interval of slow hand",
+         x = "Hoehn and Yahr")
+}
+
+plot_h_and_y_tap_correlation(tap_correlation)
+```
+
+```{r include=FALSE}
+tap_h_and_y_corr <- cor(tap_correlation$h_and_y, tap_correlation$medianTapInter_md)
+tap_h_and_y_ccc <- agRee::agree.ccc(matrix(c(tap_correlation$h_and_y, tap_correlation$medianTapInter_md), ncol=2))
+```
+
+r = `r tap_h_and_y_corr` \
+concordance = `r tap_h_and_y_ccc$value`
+
+```{r echo=FALSE}
+plot_h_and_y_walk_correlation <- function(walk_correlation) {
+  walk_correlation %>% 
+    ggplot(aes(h_and_y, AA_stride_duration_md)) +
+    geom_boxplot(aes(group=h_and_y)) +
+    labs(title = "Hoehn and Yahr and stride duration",
+         x = "Hoehn and Yahr")
+}
+
+plot_h_and_y_walk_correlation(walk_correlation)
+```
+
+```{r include=FALSE}
+walk_h_and_y_corr <- cor(walk_correlation$h_and_y, walk_correlation$AA_stride_deviation_md)
+walk_h_and_y_ccc <- agRee::agree.ccc(matrix(c(walk_correlation$h_and_y, walk_correlation$AA_stride_duration_md), ncol=2))
+```
+
+r = `r walk_h_and_y_corr` \
+concordance = `r walk_h_and_y_ccc$value`
+
+```{r echo=FALSE}
+plot_h_and_y_rotation_correlation <- function(rotation_correlation) {
+  rotation_correlation %>% 
+    ggplot(aes(h_and_y, rotation_omega_md)) +
+    geom_boxplot(aes(group=h_and_y)) +
+    labs(title = "Hoehn and Yahr and rotation omega",
+         x = "Hoehn and Yahr")
+}
+
+plot_h_and_y_rotation_correlation(rotation_correlation)
+```
+
+```{r include=FALSE}
+rotation_h_and_y_corr <- cor(rotation_correlation$h_and_y, rotation_correlation$rotation_omega_md)
+rotation_h_and_y_ccc <- agRee::agree.ccc(matrix(c(rotation_correlation$h_and_y, rotation_correlation$rotation_omega_md), ncol=2))
+```
+
+r = `r rotation_h_and_y_corr` \
+concordance = `r rotation_h_and_y_ccc$value`
+
+```{r echo=FALSE}
+plot_h_and_y_energy_correlation <- function(tremor_correlation) {
+  tremor_correlation %>% 
+    ggplot(aes(h_and_y, energy.tm_md)) +
+    geom_boxplot(aes(group=h_and_y)) +
+    labs(title = "Hoehn and Yahr and tremor energy",
+         x = "Hoehn and Yahr")
+}
+
+plot_h_and_y_energy_correlation(tremor_correlation)
+```
+
+```{r include=FALSE}
+energy_h_and_y_corr <- cor(tremor_correlation$h_and_y, tremor_correlation$energy.tm_md, use="complete")
+clean_energy <- tremor_correlation %>% 
+  filter(!is.na(h_and_y), !is.na(energy.tm_md))
+energy_h_and_y_ccc <- agRee::agree.ccc(matrix(c(clean_energy$h_and_y, clean_energy$energy.tm_md), ncol=2))
+```
+
+r = `r energy_h_and_y_corr` \
+concordance = `r energy_h_and_y_ccc$value`
+
+```{r echo=FALSE}
+plot_h_and_y_mean_correlation <- function(tremor_correlation) {
+  tremor_correlation %>% 
+    ggplot(aes(h_and_y, mean.tm_md)) +
+    geom_boxplot(aes(group=h_and_y)) +
+    labs(title = "Hoehn and Yahr and tremor mean",
+         x = "Hoehn and Yahr")
+}
+
+plot_h_and_y_mean_correlation(tremor_correlation)
+```
+
+```{r include=FALSE}
+mean_h_and_y_corr <- cor(tremor_correlation$h_and_y, tremor_correlation$mean.tm_md, use="complete")
+clean_mean <- tremor_correlation %>% 
+  filter(!is.na(h_and_y), !is.na(mean.tm_md))
+mean_h_and_y_ccc <- agRee::agree.ccc(matrix(c(clean_mean$h_and_y, clean_mean$mean.tm_md), ncol=2))
+``` 
+
+r = `r mean_h_and_y_corr` \
+concordance = `r mean_h_and_y_ccc$value`
+
+### Schwab and England
+
+`r tap_anomalies` Participants had an unreasonably high (> 1) aggregate value for `medianTapInter_md`. These participants are assumed to be errors and are neither shown in the following plot nor included in the correlation calculations below.
+
+```{r echo=FALSE}
+plot_s_and_e_tap_correlation <- function(tap_correlation) {
+  tap_correlation %>% 
+    ggplot(aes(s_and_e, medianTapInter_md)) +
+    geom_boxplot(aes(group=s_and_e)) +
+    ylim(0, 1) +
+    labs(title = "Schwab and England and median tap interval of slow hand",
+         x = "Schwab and England")
+}
+
+plot_s_and_e_tap_correlation(tap_correlation)
+```
+
+```{r include=FALSE}
+tap_s_and_e_corr <- cor(tap_correlation$s_and_e_numeric, tap_correlation$medianTapInter_md)
+tap_s_and_e_ccc <- agRee::agree.ccc(matrix(c(tap_correlation$s_and_e_numeric, tap_correlation$medianTapInter_md), ncol=2))
+```
+
+r = `r tap_s_and_e_corr` \
+concordance = `r tap_s_and_e_ccc$value`
+
+```{r echo=FALSE}
+plot_s_and_e_walk_correlation <- function(walk_correlation) {
+  walk_correlation %>% 
+    ggplot(aes(s_and_e, AA_stride_duration_md)) +
+    geom_boxplot(aes(group=s_and_e)) +
+    labs(title = "Schwab and England and stride duration",
+         x = "Schwab and England")
+}
+
+plot_s_and_e_walk_correlation(walk_correlation)
+```
+
+```{r include=FALSE}
+walk_s_and_e_corr <- cor(walk_correlation$s_and_e_numeric, walk_correlation$AA_stride_deviation_md)
+walk_s_and_e_ccc <- agRee::agree.ccc(matrix(c(walk_correlation$s_and_e_numeric, walk_correlation$AA_stride_duration_md), ncol=2))
+```
+
+r = `r walk_s_and_e_corr` \
+concordance = `r walk_s_and_e_ccc$value`
+
+```{r echo=FALSE}
+plot_s_and_e_rotation_correlation <- function(rotation_correlation) {
+  rotation_correlation %>% 
+    ggplot(aes(s_and_e, rotation_omega_md)) +
+    geom_boxplot(aes(group=s_and_e)) +
+    labs(title = "Schwab and England and rotation omega",
+         x = "Schwab and England")
+}
+
+plot_s_and_e_rotation_correlation(rotation_correlation)
+```
+
+```{r include=FALSE}
+rotation_s_and_e_corr <- cor(rotation_correlation$s_and_e_numeric, rotation_correlation$rotation_omega_md)
+rotation_s_and_e_ccc <- agRee::agree.ccc(matrix(c(rotation_correlation$s_and_e_numeric, rotation_correlation$rotation_omega_md), ncol=2))
+```
+
+r = `r rotation_s_and_e_corr` \
+concordance = `r rotation_s_and_e_ccc$value`
+
+```{r echo=FALSE}
+plot_s_and_e_energy_correlation <- function(tremor_correlation) {
+  tremor_correlation %>% 
+    ggplot(aes(s_and_e, energy.tm_md)) +
+    geom_boxplot(aes(group=s_and_e)) +
+    labs(title = "Schwab and England and tremor energy",
+         x = "Schwab and England")
+}
+
+plot_s_and_e_energy_correlation(tremor_correlation)
+```
+
+```{r include=FALSE}
+energy_s_and_e_corr <- cor(tremor_correlation$s_and_e_numeric, tremor_correlation$energy.tm_md, use="complete")
+clean_energy <- tremor_correlation %>% 
+  filter(!is.na(s_and_e_numeric), !is.na(energy.tm_md))
+energy_s_and_e_ccc <- agRee::agree.ccc(matrix(c(clean_energy$s_and_e_numeric, clean_energy$energy.tm_md), ncol=2))
+```
+
+r = `r energy_s_and_e_corr` \
+concordance = `r energy_s_and_e_ccc$value`
+
+```{r echo=FALSE}
+plot_s_and_e_mean_correlation <- function(tremor_correlation) {
+  tremor_correlation %>% 
+    ggplot(aes(s_and_e, mean.tm_md)) +
+    geom_boxplot(aes(group=s_and_e)) +
+    labs(title = "Schwab and England and tremor mean",
+         x = "Schwab and England")
+}
+
+plot_s_and_e_mean_correlation(tremor_correlation)
+```
+
+```{r include=FALSE}
+mean_s_and_e_corr <- cor(tremor_correlation$s_and_e_numeric, tremor_correlation$mean.tm_md, use="complete")
+clean_mean <- tremor_correlation %>% 
+  filter(!is.na(s_and_e), !is.na(mean.tm_md))
+mean_s_and_e_ccc <- agRee::agree.ccc(matrix(c(clean_mean$s_and_e_numeric, clean_mean$mean.tm_md), ncol=2))
+``` 
+
+r = `r mean_s_and_e_corr` \
+concordance = `r mean_s_and_e_ccc$value`
